@@ -1,0 +1,427 @@
+# ROFL Format
+:nofooter:
+
+This document could be written mainly thanks to the following projects:
+
+* https://github.com/fraxiinus/ReplayBook
+* https://github.com/ryancole/LeagueReplayReader
+
+[NOTE]
+--
+* Positions and sizes are in bytes.
+* Values are in little endian.
+* Strings are NOT null-terminated.
+--
+
+## File structure overview
+
+The file's overall structure is the following:
+
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 288 | BIN Header | The base file Header
+| 288 | A | Base JSON | The game's metadata for quick overviews
+| 288+A | 34+X (66) | Payload Header | The game's binary information header
+| 322+A+X | ? | Payload | The actual game data
+|===
+
+## BIN Header
+
+Start at position 0 in file
+
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 4 | RIOT | Magic constant string
+| 4 | 2 | ? | constant 0 bytes with unknown usage, part of magic ?
+| 6 | 256 | HEX | Data signature
+| 262 | 2 | u16 | BIN Header size
+| 264 | 4 | u32 | File size
+| 268 | 4 | u32 | JSON Metadata offset from file start
+| 272 | 4 | u32 | JSON Metadata size
+| 276 | 4 | u32 | Payload header offset from file start
+| 280 | 4 | u32 | Payload header size
+| 284 | 4 | u32 | Payload offset from payload header start
+|===
+
+## JSON Metadata
+
+The JSON Metadata section is an UTF-8 JSON String that contains metadata on the game.
+
+CAUTION: The String is NOT null-terminated
+
+### Base JSON
+
+|===
+| KEY | FORMAT | DESCRIPTION
+
+| .gameLength | Integer | Game duration in milliseconds
+| .gameVersion | String | Patch version the game was played with
+| .lastGameChunkId | Integer | Last chunk's ID ?
+| .lastKeyFrameId | Integer | Last keyframe's ID ?
+| .statsJson | String | Stringified JSON statistics on the game to parse before use
+|===
+
+### Stats JSON
+
+|===
+| KEY | FORMAT | DESCRIPTION
+
+|===
+
+## Payload Header
+
+The header's position is provided in the BIN header
+
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 8 | u64 | Match ID
+| 8 | 4 | u32 | Match duration in ms
+| 12 | 4 | u32 | Keyframes count
+| 16 | 4 | u32 | Chunk count
+| 20 | 4 | u32 | Last chunk's ID
+| 24 | 4 | u32 | First chunk's ID
+| 28 | 4 | u32 | Keyframe interval
+| 32 | 2 | u16 | Encryption key length
+| 34 | X | String | Encryption key (current length is always 32 bytes)
+|===
+
+## Payload
+
+The payload's position is provided in the BIN header. The payload runs until EOF and is encrypted with the encryption key. Hereafter, we use Segment to talk about a data range that may either be a Chunk or a Keyframe.
+
+TODO: decrypt and understand segmentation
+
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 17*n | Segment Header | Segment Headers (n is the total number of segments)
+| 17*n | ? | Chunk/Keyframe | Encrypted Segments whose size and position relative to the header list's end is provided in the segment header
+|===
+
+### Payload Segment Header
+
+The payload starts with _chunk count + keyframe count_ Segment headers whose structure is the following :
+
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 4 | u32 | Segment ID
+| 4 | 1 | u8 | Segment type (Chunk = 1, Keyframe = 2)
+| 5 | 4 | u32 | Segment data Length
+| 9 | 4 | u32 | Associated Chunk ID (Keyframes only, is 0 with chunks)
+| 13 | 4 | u32 | Segment data offset (from end of segment headers)
+|===
+
+### Segment data
+
+To read a segment, get the Encryption Key and the game's ID as a string as well as the segment's data, then:
+
+* Base64 decode the encryption key string
+* Use Blowfish to decrypt the decoded encryption key with the game ID string as the key (and remove the padding whose length is provided in the last byte of the decrypted data)
+* Use Blowfish to decrypt the segment data with the decrypted encryption key (and remove the padding whose length is provided in the last byte of the decrypted data)
+* Use Gzip to unpack the decrypted segment data
+
+.Pseudocode
+[source, ruby]
+--
+### Variables
+# game_id = "5000000000"
+# encryption_key = "Ezyoyu7dqcDbGXsVV6Vg1vAkiuFuirFD"
+# segment_encrypted_data = [...]
+### Functions
+# byte[] blowfish_decrypt(byte encrypted_data[], byte key[], bool remove_padding)
+# byte[] gunzip(byte compressed_data[])
+
+raw_encryption_key = base64_decode(encryption_key)
+chunk_key = blowfish_decrypt(raw_encryption_key, game_id, true)
+segment_zipped_data = blowfish_decrypt(segment_encrypted_data, chunk_key, true)
+segment_data = gunzip(segment_zipped_data)
+--
+
+[NOTE]
+--
+From here, all information is speculative and needs to be verified before usage.
+--
+
+Payload data's sub-sections are split in two parts :
+
+* One header section whose length depends on the section's type
+* One data section whose length is provided in the section header
+
+#### Payload segment sections map
+
+Payload sections are typed according to the first byte of the section. Each segment type may be found in either a loading chunk or keyframe (pre-game-start data), or a game chunk or keyframe, or a mix of either of them.
+
+|===
+| ID | Loading Chunk | Loading Keyframe | Game Chunk | Game Keyframe | Note
+
+|   1 |   |   | X | X | Start section of every chunk and keyframe
+|   2 |   |   | X |   | Alternative start section
+// |  17 | X | X |   |   | A VERIFIER
+// 32
+|  33 |   | X |   |   |
+|  49 |   | X | X |   | Game Chunk 1
+|  50 |   |   | X |   | Game Chunk 1
+|  81 |   | X |   | X |
+| 113 |   | X |   |   | A VERIFIER
+| 129 |   | X | X |   |
+| 130 |   |   | X |   | 
+| 145 |   |   | X | X |
+| 146 |   |   | X |   |
+| 147 |   |   | X |   |
+| 161 |   |   | X | X |
+| 162 |   |   | X | X |
+| 177 |   |   | X | X |
+| 178 |   |   | X |   |
+| 179 |   |   | X |   |
+| 193 |   |   | X |   |
+| 209 |   |   | X | X |
+| 225 |   |   | X | X |
+| 226 |   |   | X |   |
+| 241 |   |   | X | X |
+| 242 |   |   | X |   |
+|===
+
+#### Payloads data structure
+
+.Section Header common start structure
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | Section type
+| 1 | 4 | ? | Four times 0
+| 6 | ? | ? | Variable data
+|===
+
+.Type = 1 - Main start section
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | Section type = 1
+| 1 | 4 | f32 | In-game timestamp at payload segment start
+| 5 | 2 | u16 | Section data length L
+| 7 | 8 | ? | ?
+| 15 | L | Data = 1 | Data
+|===
+
+.Type = 2 - Alternative start section
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | Section type = 2
+| 1 | 4 | f32 | In-game timestamp at payload segment start
+| 5 | 2 | u16 | Section data length L
+| 7 | 8 | ? | ?
+| 15 | L | Data = 2 | Data
+|===
+
+.Type = 17
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 5 | Section Header start | Section start
+| 5 | 1 | u8 | Section data length
+| 6 | 6 | ? | ?
+| 12 | ? | Data = 17 | Data
+|===
+
+.Type = 33
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 5 | Section Header start | Section start
+| 5 | 2 | u16 | Segment data Length
+| 7 | 2 | u16 | Static 0 ?
+| 9 | 2 | ? | 
+| 11 | 1 | ? | Static 0 ?
+| 12 | ? | Data = 33 | Data
+|===
+
+.Type = 49
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 5 | Section Header start | Section start
+| 5 | 1 | u8 | Segment data Length ()
+| 6 | 3 | ? |
+| 9 | ? | Data = 49 | Data
+|===
+
+.Type = 81
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 5 | Section Header start | Section start
+| 5 | 1 | u8 | Segment data Length ()
+| 6 | 3 | ? |
+| 9 | 1 | ? | = 255
+| 10 | ? | Data = 81 | Data
+|===
+
+.Data = 81
+--
+* If length = 1 => [32]
+* If length = 2 => [42-46, 80]
+--
+
+
+.Type = 113
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 5 | Section Header start | Section start
+| 5 | 1 | u8 | Segment data Length
+| 6 | 1 | u8 | = 0
+| 7 | ? | Data = 113 | Data
+|===
+
+.Data = 132
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 132
+| 1 | 1 | u8 | ?
+| 2 | 1 | u8 | = 115
+| 3 | ? | u8 | ?
+|===
+
+.Type = 145
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 145
+| 1 | 1 | u8 | = 0 ?
+| 2 | 1 | u8 | Segment data Length
+| 3 | 1 | u8 | = 0 ?
+| 4 | ? | Data = 145 | Data
+|===
+
+.Type = 145
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 146
+| 1 | 1 | u8 | = 0/33 ?
+| 2 | 1 | u8 | Segment data Length
+| 3 | 6 | ? | = [42, 1, 0, 0, 0, 0] ?
+| 9 | ? | Data = 146 | Data
+|===
+
+.Type = 161
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 161
+| 1 | 1 | u8 | = 0
+| 2 | 2 | u16 | Segment data Length
+| 4 | 2 | ? | = 0 ?
+| 6 | 2 | ? |
+| 8 | 1 | ? | = 0 ?
+| 9 | ? | Data = 161 | Data
+|===
+
+.Type = 162
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 162
+| 1 | 1 | u8 | = 0
+| 2 | 2 | u16 | Segment data Length
+| 4 | 2 | ? | = 0 ?
+| 6 | 2 | ? |
+| 8 | 1 | ? | = 0 ?
+| 9 | ? | Data = 162 | Data
+|===
+
+.Type = 177
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 177
+| 1 | 1 | u8 | = 0
+| 2 | 1 | u8 | Segment data Length
+| 3 | 2 | ? |
+| 5 | 1 | ? | 0
+| 6 | ? | Data = 177 | Data
+|===
+177, 0, 1, 200, 0, 0, 100,
+
+.Type = 178
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 178
+| 1 | 1 | u8 | = 0 ?
+| 2 | 1 | u8 | Segment data Length
+| 3 | 2 | ? | = 0 ?
+| 5 | 2 | ? |
+| 6 | ? | Data = 178 | Data
+|===
+
+.Type = 209
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 209
+| 1 | 1 | u8 | = 0
+| 2 | 1 | u8 | Segment data Length
+| 3 | 3 | ? | 
+| 6 | 1 | ? | = 255
+| 7 | ? | Data = 209 | Data
+|===
+
+.Type = 222
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 5 | Section Header start | Section start
+| 5 | 1 | u8 | Segment data Length ()
+| 6 | 1 | ? | = 2 ?
+| 7 | ? | Data = 222 ? | Data ?
+|===
+
+.Type = 237
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 5 | Section Header start | Section start
+| 5 | 1 | u8 | Segment data Length ()
+| 6 | 2 | ? | ?
+| 8 | ? | Data = 237 | Data
+|===
+
+.Type = 241
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+
+| 0 | 1 | u8 | = 241
+| 1 | 1 | u8 | = 0
+| 2 | 1 | u8 | Segment data Length
+| 3 | 1 | u8 | = 0 ?
+| 4 | ? | Data = 241 | Data
+|===
+
+.Data = 241 (~132)
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 132
+| 1 | 1 | u8 | ?
+| 2 | 1 | u8 | = 115
+| 3 | ? | u8 | ?
+|===
+
+.Type = 242
+|===
+| POS | SIZE | FORMAT | DESCRIPTION
+
+| 0 | 1 | u8 | = 242
+| 1 | 1 | u8 | = 0
+| 2 | 1 | u8 | Segment data Length
+| 3 | 1 | u8 | = 0 ?
+| 4 | ? | Data = 242 | Data
+|===

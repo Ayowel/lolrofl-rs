@@ -1,18 +1,33 @@
+//! Definition of data structures used in the payload's segments of a ROFL file
 use byteorder::{ByteOrder, LittleEndian};
 use crate::error;
 
+/// A generic interface for data segments' sections
+/// 
+/// This trait will probably be renamed in future versions
 pub trait SegmentDataCore {
+    /// The supported section's ID
+    /// 
+    /// This will probably be deprecated in future releases
     const KIND: u8;
+    /// Get the supported section's ID
+    /// 
+    /// This will probably be deprecated in future releases
     #[inline]
     fn kind(&self) -> u8 {Self::KIND}
+    /// Get the length of the constant part of the section
     fn core_len(&self) -> usize;
+    /// Get the length of the variable part of the section
     fn data_len(&self) -> usize;
+    /// Get the full length of the section
     #[inline]
     fn len(&self) -> usize {self.core_len() + self.data_len()}
-    fn raw_data(&self) -> Option<&[u8]>;
+    /// Get the raw variable part of the section if any and supported
+    fn raw_data(&self) -> Option<&[u8]> {None}
 }
 
 /// 9-bytes section at the start of a data segment
+/// 
 /// FIXME: This is a 15-bytes + X section, not 9-bytes
 #[derive(Clone, Debug)]
 pub struct StartSegment {
@@ -22,7 +37,7 @@ pub struct StartSegment {
     len: u16,
     /// TODO
     pos_7: u16,
-
+    /// Variable data
     data: Vec<u8>,
 }
 
@@ -61,20 +76,18 @@ impl SegmentDataCore for StartSegment {
     fn raw_data(&self) -> Option<&[u8]> {Some(&self.data[..])}
 }
 
-// Generic data container for known types without dedicated classes.
-//
-// NOTE: Maybe this should use references instead of having its own vec
-// and be used as a lightweight proxy before conversion to heavy/explicit types
+/// Generic data container used for quick scans and iteration over a ROFL segment's data
 #[derive(Clone, Debug)]
 pub struct GenericDataSegment<'a> {
+    /// Length of the constant part of the section
     core_len: usize,
+    /// Data of the section
     data: &'a[u8],
 }
 
 impl GenericDataSegment<'_> {
-    // Get raw internal Vec
-    //
-    // NOTE: This might be dropped in favor of SegmentDataCore::raw_data impl
+    /// Get full raw internal section
+    #[warn(deprecated)]
     pub fn bytes(&self) -> &[u8] { &self.data }
 
     /// Create a new GenericDataSegment from a slice.
@@ -106,7 +119,7 @@ impl GenericDataSegment<'_> {
         }
     }
 
-    /// Used internally to turn a slice into an instance
+    /// Internal helper function to safely build a GenericDataSegment from a slice
     fn buffer_to_generic(slice: &[u8], size_offset: usize, size_len: usize, core_size: usize) -> Result<GenericDataSegment, error::Errors> {
         if slice.len() < core_size {
             eprintln!("Failed due to insufficient slice length for core ({} of {} expected)", slice.len(), core_size);

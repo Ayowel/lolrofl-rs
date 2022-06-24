@@ -1,7 +1,14 @@
+//! Defines the error data containers that may be used by this crate
+
+/// The Different kinds of error that may be raised by this crate
 #[derive(Debug)]
 pub enum Errors {
+    /// No data was provided despite some being required
     NoData,
+    /// The buffer used for an operation was too small
     BufferTooSmall,
+    /// The buffer used for an operation was malformed or corrupted
+    /// and did not match the expected content constraints
     InvalidBuffer,
 }
 

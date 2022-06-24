@@ -1,3 +1,42 @@
+/*!
+Rust library and tool to parse and inspect ROFL replay files generated from League of Legends games.
+
+Backward-compatibility for replay files is NOT to be expected as of now.
+
+## Usage as a command-line tool
+
+After building with `cargo install --bin lolrofl --features "clap json payload"`, a new `lolrofl` executable become available.
+
+Said executable allows the inspection of ROFL files to extract game information, metadata, or development intel with the following commands:
+
+* `get`: Get high-level information on the file
+  * `get info`: Print simple/high-level info on the file and the game
+  * `get metadata`: Print the game's metadata
+  * `get payload`: Print technical information on the file
+* `analyze`: Get low-level information on the file - usually for debug and development purpose
+* `export`: Export chunk or keyframe data to a file or directory
+
+## Usage as a library
+
+Use `lolrofl` to parse a loaded file's content :
+
+```rust
+// Load a file in memory
+let content = std::fs::read(source_file).unwrap();
+
+// Build a selector for data loading
+let data_selector = lolrofl::consts::LOAD_HEAD | lolrofl::consts::LOAD_METADATA;
+
+// Load the data with the Rofl object
+let data = lolrofl::Rofl::from_slice(&content[..], data_selector).unwrap();
+
+// Print the file's signature
+println!("{:?}", data.head().signature());
+// Print the file's metadata
+println!("{:?}", data.meta().unwrap());
+```
+*/
+
 use blowfish::{Blowfish};
 use byteorder::{ByteOrder, LittleEndian};
 use blowfish::cipher::{BlockDecryptMut, KeyInit};
@@ -9,35 +48,60 @@ pub mod error;
 pub mod segments;
 use segments::SegmentDataCore;
 
+/// Base ROFL file's parser
 pub struct Rofl<'a> {
+    /// ROFL file's Start Header
     head: BinHeader,
+    /// ROFL File's JSON metadata string
     metadata: Option<String>,
+    /// ROFL File's Payload header
     payload: Option<PayloadHeader>,
+    /// ROFL File's Chunk Segments
     chunks: Vec<Segment>,
+    /// ROFL File's Keyframe Segments
     keyframes: Vec<Segment>,
+    /// ROFL File's data
     data: &'a[u8],
+    /// ROFL segments' decryption cipher
     cipher: Option<Blowfish::<byteorder::BigEndian>>,
 }
 
+/// Constants used to define which parts of a ROFL file we want to load
+/// 
+/// __WARNING:__ This module should disappear in the short run
 pub mod consts {
+    /// Load The file's header
+    /// 
+    /// Note that the file's header will ALWAYS be loaded
     pub const LOAD_HEAD: u16 = 0x01;
+    /// Load the file's JSON metadata string
     pub const LOAD_METADATA: u16 = 0x02;
+    /// Load the payload's header
     pub const LOAD_PAYLOAD_HEAD: u16 = 0x04;
+    /// Load the segments' headers
     pub const LOAD_SEGMENTS_HEAD: u16 = 0x08;
+    /// Load the segments' data
     pub const LOAD_SEGMENTS: u16 = 0x10;
+    /// Load everything
     pub const LOAD_ALL: u16 = 0x1f;
 }
 
 impl Rofl<'_> {
+    /// Length in bytes of a segment header
     const PAYLOAD_INTERNAL_HEADER_LEN: usize = 17;
-    pub const MAGIC: [u8; 4] = [82,73,79,84];
-
+    /// Starting bytes of a ROFL file
+    pub const MAGIC: [u8; 4] = [82,73,79,84]; // TODO: check if 6 bytes instead of 0
+    /// Get the ROFL header
     pub fn head(&self) -> &BinHeader { &self.head }
+    /// Get the loaded JSON Metadata string
     pub fn meta(&self) -> Option<&String> { self.metadata.as_ref() }
+    /// Get the loaded payload header
     pub fn payload(&self) -> Option<&PayloadHeader> { self.payload.as_ref() }
+    /// Get the loaded chunk headers and data
     pub fn chunks(&self) -> &Vec<Segment> { &self.chunks }
+    /// Get the loaded keyframe headers and data
     pub fn keyframes(&self) -> &Vec<Segment> { &self.keyframes }
-
+    /// Load the JSON Metadata String if it is not already and returns it
     pub fn load_meta(&mut self) -> Result<&String, error::Errors> {
         if self.metadata.is_none() {
             if self.data.len() < self.head.metadata_offset() + self.head.metadata_len() {
@@ -53,7 +117,7 @@ impl Rofl<'_> {
         }
         self.metadata.as_ref().ok_or(error::Errors::NoData)
     }
-
+    /// Load the cipher key required to decrypt a segment
     fn cipher(&mut self) -> Option<&Blowfish::<byteorder::BigEndian>> {
         if self.cipher.is_none() {
             self.cipher = self.payload()
@@ -61,7 +125,7 @@ impl Rofl<'_> {
         }
         self.cipher.as_ref()
     }
-
+    /// Load the payload header if it is not already loaded and return it
     pub fn load_payload(&mut self) -> Result<Option<&PayloadHeader>, error::Errors> {
         if self.payload.is_none() {
             self.payload = Some(PayloadHeader::from_raw_section( // Fix PayloadHeader::from_raw_section to be able to fail
@@ -70,7 +134,7 @@ impl Rofl<'_> {
         }
         Ok(self.payload.as_ref())
     }
-
+    /// Load the segment headers if they are not already loaded and return them
     pub fn load_segments_heads(&mut self) -> Result<(), error::Errors> {
         if self.chunks.len() == 0 && self.keyframes.len() == 0 {
             self.load_payload().and_then(|payload_opt| {
@@ -90,7 +154,7 @@ impl Rofl<'_> {
             Ok(())
         }
     }
-
+    /// Decrypt a segment
     fn rofl_decrypt_decompress(data: &[u8], cipher: &mut Blowfish::<byteorder::BigEndian>, out: &mut Vec<u8>) -> Result<(), error::Errors>{
         let decrypted_data = blow_decrypt(data, cipher, true);
         if decrypted_data.len() < data.len() {
@@ -107,7 +171,9 @@ impl Rofl<'_> {
         }
         Ok(())
     }
-
+    /// Load the segments if they are not already loaded
+    /// 
+    /// This function does not return anything in case of success
     pub fn load_segments(&mut self) -> Result<(), error::Errors> {
         self.load_segments_heads().and_then(|_| {
             self.cipher().ok_or(error::Errors::NoData)?;
@@ -133,8 +199,9 @@ impl Rofl<'_> {
             Ok(())
         })
     }
-
+    /// Load a payload segment if it is not already loaded and return it
     fn load_segment(&mut self, id: u32, is_chunk: bool, slice: &[u8]) -> Result<&Segment, error::Errors> {
+        // FIXME: This code should ensure that the segment is not already loaded
         let segment;
         if is_chunk {
             if id as usize - 1 >= self.chunks.len() { return Err(error::Errors::NoData); }
@@ -160,19 +227,18 @@ impl Rofl<'_> {
             return Err(error::Errors::InvalidBuffer);
         }
         Ok(segment)
-
     }
-
+    /// Load a chunk if it is not already loaded and return it
     pub fn load_chunk(&mut self, id: u32, slice: &[u8]) -> Result<&Segment, error::Errors> {
         self.load_segment(id, true, slice)
     }
-
+    /// Load a keyframe if it is not already loaded and return it
     pub fn load_keyframe(&mut self, id: u32, slice: &[u8]) -> Result<&Segment, error::Errors> {
         self.load_segment(id, false, slice)
     }
-
-    // TODO: Return meaningful errors
+    /// Create a new Rofl instance from a ROFL file's slice
     pub fn from_slice<'a>(slice: &'a[u8], config: u16) -> Result<Rofl<'a>,()> {
+        // TODO: Return meaningful errors
         if slice.len() < Rofl::MAGIC.len() || Rofl::MAGIC != slice[..Rofl::MAGIC.len()] {
             return Err(()); // TODO: magic does not exist
         }
@@ -254,13 +320,18 @@ impl Rofl<'_> {
     }
 }
 
+/// An iterator for lightweight scanning of a data segment
 pub struct SegmentIterator<'a> {
+    /// The segment's data
     data: &'a[u8],
+    /// The iterator's mosition in the segment
     index: usize,
+    /// Whether the iterator overflew or failed to produce a valid object during iteration
     invalid: bool,
 }
 
 impl<'a> SegmentIterator<'a> {
+    /// Build a new iterator from a raw decrypted segment's slice
     pub fn new(data: &'a[u8]) -> SegmentIterator<'a> {
         SegmentIterator {
             data,
@@ -269,8 +340,18 @@ impl<'a> SegmentIterator<'a> {
         }
     }
 
+    /// Whether the iterator is valid
     pub fn is_valid(&self) -> bool { !self.invalid }
+
+    /// The index in the data slice the iterator is at
+    /// 
+    /// This should only be used for debugging purposes when
+    /// is_valid returns false after an iteration
     pub fn internal_index(&self) -> usize { self.index }
+    /// The data slice the iterator is moving through
+    /// 
+    /// This should only be used for debugging purposes when
+    /// is_valid returns false after an iteration
     pub fn internal_slice(&self) -> &[u8] { self.data }
 }
 
@@ -292,8 +373,7 @@ impl<'a> std::iter::Iterator for SegmentIterator<'a> {
     }
 }
 
-
-/* Blowfish impl with depad */
+/** Blowfish impl with depad */
 fn blow_decrypt(cipher: &[u8], decrypt: &mut Blowfish::<byteorder::BigEndian>, depad: bool) -> Vec<u8> {
     let mut data_store = cipher.to_vec();
 
@@ -312,7 +392,7 @@ fn blow_decrypt(cipher: &[u8], decrypt: &mut Blowfish::<byteorder::BigEndian>, d
     data_store
 }
 
-/* Blowfish impl with depad */
+/** Blowfish impl with depad */
 fn blowfish_decrypt(cipher: &[u8], key: &[u8], depad: bool) -> Vec<u8> {
     assert_eq!(cipher.len()%8, 0);
     assert_ne!(cipher.len(), 0);
@@ -336,6 +416,9 @@ fn blowfish_decrypt(cipher: &[u8], key: &[u8], depad: bool) -> Vec<u8> {
     data_store
 }
 
+/// Dezip function
+/// 
+/// TODO: delete this
 fn dezip(dataset: &[u8]) -> Vec<u8> {
     let mut unzipped_data = Vec::new();
     let mut decoder = GzDecoder::new(dataset);
@@ -343,16 +426,24 @@ fn dezip(dataset: &[u8]) -> Vec<u8> {
     unzipped_data
 }
 
-/* File parser */
+/// ROFL file's header information
 #[derive(Debug)]
 pub struct BinHeader {
+    /// The file's signature
     signature: Vec<u8>, // Fixed-size: 256 bits (or 0 if ignored)
+    /// The size of the header (constant in all known examples)
     header_length: u16,
+    /// Total file length
     file_length: u32,
+    /// Offset in bytes from the start of the file of the metadata section
     metadata_offset: u32,
+    /// Length in bytes of the metadata section
     metadata_length: u32,
+    /// Offset in bytes from the start of the file of the payload header section
     payload_header_offset: u32,
+    /// Length in bytes of the payload header section
     payload_header_length: u32,
+    /// Offset in bytes from the start of the file of the payload section
     payload_offset: u32,
 }
 
@@ -381,32 +472,55 @@ impl std::fmt::Display for BinHeader {
 }
 
 impl BinHeader {
+    /// Get the file's signature
     pub fn signature(&self) -> &Vec<u8> {
         &self.signature
     }
-
+    /// Get the file's header length
     pub fn header_len(&self) -> usize {
         self.header_length as usize
     }
+    /// Get the file's length in bytes as per its binary data
+    /// 
+    /// This may not match the actual file's length if an error occured
     pub fn file_len(&self) -> usize {
         self.file_length as usize
     }
+    /// Length of the file's metadata section
+    /// 
+    /// This should not be required in normal use
     pub fn metadata_len(&self) -> usize {
         self.metadata_length as usize
     }
+    /// Offset of the file's metadata section
+    /// 
+    /// This should not be required in normal use
     pub fn metadata_offset(&self) -> usize {
         self.metadata_offset as usize
     }
+    /// Length of the file's payload header section
+    /// 
+    /// This should not be required in normal use
     pub fn payload_header_len(&self) -> usize {
         self.payload_header_length as usize
     }
+    /// Offset of the file's payload header section
+    /// 
+    /// This should not be required in normal use
     pub fn payload_header_offset(&self) -> usize {
         self.payload_header_offset as usize
     }
+    /// Offset of the file's payload section
+    /// 
+    /// This should not be required in normal use
     pub fn payload_offset(&self) -> usize {
         self.payload_offset as usize
     }
     
+    /// Create a new header from a manually-loaded file start section
+    /// 
+    /// Use from_raw_source instead
+    #[warn(deprecated)]
     fn from_raw_section(data: &[u8]) -> BinHeader {
         BinHeader {
             signature: Vec::from(&data[6..262]),
@@ -419,47 +533,71 @@ impl BinHeader {
             payload_offset: LittleEndian::read_u32(&data[284..]),
         }
     }
+    /// Create a new header from a manually-loaded file start section
+    /// 
+    /// This will be replaced by a from_raw function in the future
     pub fn from_raw_source(data: &[u8]) -> BinHeader {
         BinHeader::from_raw_section(&data[0..])
     }
 }
 
+/// ROFL file's payload header information
 #[derive(Debug)]
 pub struct PayloadHeader {
+    /// The ID of the game
     match_id: u64,
+    /// The duration of the game in milliseconds
     match_length: u32,
+    /// The number of keyframes in the payload
     keyframe_count: u32,
+    /// The number of chunks in the payload
     chunk_count: u32,
+    /// The last chunk used to load data before the game
     end_startup_chunk_id: u32,
+    /// The chunk that contains the game's data
     start_game_chunk_id: u32,
+    /// The duration covered by a single keyframe
     keyframe_interval: u32,
+    /// The length of the encrypted key used to encrypt the game's data
+    /// 
+    /// NOTE: This attribute should be removed in later versions
     encryption_key_length: u16,
+    /// The encrypted key of the game's payload
     encryption_key: Vec<u8>,
 }
 
 impl PayloadHeader {
+    /// Get the ID of the game
     pub fn id(&self) -> u64 { self.match_id }
+    /// Get the duration of the game in milliseconds
     pub fn duration(&self) -> u32 { self.match_length }
+    /// Get the number of keyframes
     pub fn keyframe_count(&self) -> u32 { self.keyframe_count }
+    /// Get the number of chunks
     pub fn chunk_count(&self) -> u32 { self.chunk_count }
+    /// Get the last loading chunk
     pub fn load_end_chunk(&self) -> u32 { self.end_startup_chunk_id }
+    /// Get the first game chunk
     pub fn game_start_chunk(&self) -> u32 { self.start_game_chunk_id }
+    /// Get the duration of a keyframe in milliseconds
     pub fn keyframe_interval(&self) -> u32 { self.keyframe_interval }
+    /// Get the encrypted payload encryption key
     pub fn encryption_key(&self) -> &str { std::str::from_utf8(&self.encryption_key[..]).unwrap() }
-
-    // TODO: move to higher-level structure
+    /// Get the decrypted payload encryption key
     pub fn segment_encryption_key(&self) -> Vec<u8> {
         let key = base64::decode(&self.encryption_key).unwrap();
         blowfish_decrypt(&key[..], self.match_id.to_string().as_bytes(), true)
     }
-
+    /// Decrypt a raw payload data segment from the same file as this payload
+    /// 
+    /// WARN: This function will be changed in the future to return a Result
+    #[warn(deprecated)]
     pub fn expand_payload_data(slice: &[u8], key: &[u8]) -> Vec<u8> {
         let zipped = blowfish_decrypt(slice, key, true);
         let d = dezip(&zipped[..]);
         d
     }
-    
-    pub fn from_raw_section(data: &[u8]) -> PayloadHeader {
+    fn from_raw_section(data: &[u8]) -> PayloadHeader {
         PayloadHeader {
             match_id: LittleEndian::read_u64(&data[..8]),
             match_length: LittleEndian::read_u32(&data[8..12]),
@@ -501,16 +639,24 @@ impl std::fmt::Display for PayloadHeader {
     }
 }
 
+/// Container for Chunk and Keyframe data
 #[derive(Debug)]
-pub struct Segment { // Container for Chunk & Keyframe data
+pub struct Segment {
+    /// The segment's ID
     id: u32,
-    chunk_type: u8,
+    /// Whether the segment is a chunk or a keyframe
+    segment_type: u8,
+    /// Length of the segment's data
     length: u32,
+    /// ID of the first associated Chunk (if this segment is a keyframe), else 0
     chunk_id: u32,
+    /// Internal offset of the segment's data
     offset: u32,
+    /// Segment's data (if it is loaded)
     data: Vec<u8>,
 }
 
+/// Internal enum that maps segment type high-level names to their numerical value
 #[derive(Debug)] #[repr(u8)]
 enum SegmentType {
     Chunk = 1,
@@ -518,28 +664,41 @@ enum SegmentType {
 }
 
 impl Segment {
+    /// The segment's ID
     pub fn id(&self) -> u32 { self.id }
-    pub fn len(&self) -> usize { self.length as usize }
-    pub fn offset(&self) -> usize { self.offset as usize }
-    pub fn is_loaded(&self) -> bool { !self.data.is_empty() }
-    pub fn data(&self) -> &Vec<u8> { &self.data }
 
+    /// The length in bytes of the segment's data
+    pub fn len(&self) -> usize { self.length as usize }
+
+    /// The offset in bytes from the segment headers' end at which the segment's data starts
+    pub fn offset(&self) -> usize { self.offset as usize }
+
+    /// Whether the segment's data section is loaded
+    pub fn is_loaded(&self) -> bool { !self.data.is_empty() }
+
+    /// Get the raw segment's data
+    pub fn data(&self) -> &Vec<u8> { &self.data }
+    /// Build a new segment headet from a payload's data
+    /// 
+    /// This does not load the segment's data section
     pub fn from_raw_section(data: &[u8]) -> Segment {
         Segment {
             id: LittleEndian::read_u32(&data[0..]),
-            chunk_type: data[4],
+            segment_type: data[4],
             length: LittleEndian::read_u32(&data[5..]),
             chunk_id: LittleEndian::read_u32(&data[9..]),
             offset: LittleEndian::read_u32(&data[13..]),
             data: Vec::new(),
         }
     }
-
+    /// Whether this segment is a chunk
     pub fn is_chunk(&self) -> bool {
-        self.chunk_type == SegmentType::Chunk as u8
+        self.segment_type == SegmentType::Chunk as u8
     }
+
+    /// Whether this segment is a keyframe
     pub fn is_keyframe(&self) -> bool {
-        self.chunk_type == SegmentType::Keyframe as u8
+        self.segment_type == SegmentType::Keyframe as u8
     }
 }
 

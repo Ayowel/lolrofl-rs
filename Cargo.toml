@@ -5,7 +5,7 @@ edition = "2021"
 license = "Apache-2.0"
 description = "Library and tool to parse and inspect ROFL replay files generated from League of Legends games."
 repository = "https://github.com/Ayowel/lolrofl-rs"
-exclude = ["/.gitignore", "/ROFLFormat.adoc"]
+exclude = ["/.gitignore", "/ROFLFormat.adoc", "/.github"]
 
 [[bin]]
 name = 'lolrofl'

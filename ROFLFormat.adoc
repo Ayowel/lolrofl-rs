@@ -3,6 +3,7 @@
 
 This document could be written mainly thanks to the following projects:
 
+* https://github.com/loldevs/leaguespec/wiki 
 * https://github.com/fraxiinus/ReplayBook
 * https://github.com/ryancole/LeagueReplayReader
 
@@ -15,7 +16,37 @@ This document could be written mainly thanks to the following projects:
 
 ## File structure overview
 
-The file's overall structure is the following:
+
+.Representation of a file with 3 Chunks and 2 Keyframes
+[cols="13"]
+|===
+.4+^.^| BIN Header
+.4+^.^| JSON Metadata
+.4+^.^| Payload Header
+10+^.^| Payload
+
+5+^| Segments headers
+5+^| Segments data (encrypted)
+
+.2+^.^| Header Chunk 1
+.2+^.^| Header Chunk 2
+.2+^.^| Header Keyframe 1
+.2+^.^| Header Chunk 3
+.2+^.^| Header Keyframe 2
+^| Chunk 1
+^| Chunk 2
+^| Keyframe 1
+^| Chunk 3
+^| Keyframe 2
+
+^.^| Sections
+^.^| Sections
+^.^| Sections
+^.^| Sections
+^.^| Sections
+|===
+
+A file's overall structure is the following:
 
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
@@ -23,7 +54,7 @@ The file's overall structure is the following:
 | 0 | 288 | BIN Header | The base file Header
 | 288 | A | Base JSON | The game's metadata for quick overviews
 | 288+A | 34+X (66) | Payload Header | The game's binary information header
-| 322+A+X | ? | Payload | The actual game data
+| 322+A+X | ? (until EOF) | Payload | The actual game data
 |===
 
 ## BIN Header
@@ -47,23 +78,25 @@ Start at position 0 in file
 
 ## JSON Metadata
 
-The JSON Metadata section is an UTF-8 JSON String that contains metadata on the game.
+The JSON Metadata section is an UTF-8 JSON String that contains metadata on the game. Note that most actual information is in the `statsjson` json string attribute.
 
-CAUTION: The String is NOT null-terminated
+[CAUTION]
+The String is NOT null-terminated
 
-### Base JSON
-
+.Base JSON attributes
 |===
 | KEY | FORMAT | DESCRIPTION
 
 | .gameLength | Integer | Game duration in milliseconds
 | .gameVersion | String | Patch version the game was played with
-| .lastGameChunkId | Integer | Last chunk's ID ?
-| .lastKeyFrameId | Integer | Last keyframe's ID ?
+| .lastGameChunkId | Integer | Last chunk's ID
+| .lastKeyFrameId | Integer | Last keyframe's ID
 | .statsJson | String | Stringified JSON statistics on the game to parse before use
 |===
 
-### Stats JSON
+.Stats JSON attributes
+
+// TODO
 
 |===
 | KEY | FORMAT | DESCRIPTION
@@ -166,7 +199,7 @@ Payload sections are typed according to the first byte of the section. Each segm
 |  49 |   | X | X |   | Game Chunk 1
 |  50 |   |   | X |   | Game Chunk 1
 |  81 |   | X |   | X |
-| 113 |   | X |   |   | A VERIFIER
+| 113 |   | X |   |   |
 | 129 |   | X | X |   |
 | 130 |   |   | X |   | 
 | 145 |   |   | X | X |

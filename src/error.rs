@@ -1,6 +1,6 @@
 //! Defines the error data containers that may be used by this crate
 
-/// The Different kinds of error that may be raised by this crate
+/// The errors that may be raised by this crate
 #[derive(Debug)]
 pub enum Errors {
     /// No data was provided despite some being required

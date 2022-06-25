@@ -1,6 +1,6 @@
 use clap::{Args, ArgEnum, Parser, Subcommand};
 use json::parse;
-use lolrofl::segments::SegmentDataCore;
+use lolrofl::{Rofl, model::section::{GenericSection, SectionCore}};
 
 /// A program to extract information from LoL replay files
 #[derive(Parser, Debug)]
@@ -174,15 +174,15 @@ fn main() {
             match inspect_args.command {
                 SubInspectCommands::Info(info_args) => {
                     let content = std::fs::read(source_file).unwrap();
-                    let data = lolrofl::Rofl::from_slice(&content[..], lolrofl::consts::LOAD_HEAD).unwrap();
+                    let data = Rofl::from_slice(&content[..]).unwrap();
                     if info_args.signature {
                         println!("{:?}", data.head().signature());
                     }
                 },
                 SubInspectCommands::Metadata(meta_args) => {
                     let content = std::fs::read(source_file).unwrap();
-                    let data = lolrofl::Rofl::from_slice(&content[..], lolrofl::consts::LOAD_METADATA).unwrap();
-                    let json_metadata_string = data.meta().unwrap();
+                    let data = Rofl::from_slice(&content[..]).unwrap();
+                    let json_metadata_string = data.metadata().unwrap();
                     if !meta_args.stats {
                         println!("{}", json_metadata_string);
                     } else {
@@ -192,7 +192,7 @@ fn main() {
                 },
                 SubInspectCommands::Payload(payload_args) => {
                     let content = std::fs::read(source_file).unwrap();
-                    let data = lolrofl::Rofl::from_slice(&content[..], lolrofl::consts::LOAD_PAYLOAD_HEAD).unwrap();
+                    let data = Rofl::from_slice(&content[..]).unwrap();
                     let payload = data.payload().unwrap();
                     if payload_args.id {
                         println!("ID: {}", payload.id());
@@ -237,10 +237,9 @@ fn main() {
             match export_args.command {
                 SubExportCommands::Chunk(chunk_args) => {
                     let content = std::fs::read(source_file).unwrap();
-                    let data = lolrofl::Rofl::from_slice(&content[..], lolrofl::consts::LOAD_SEGMENTS).unwrap();
-                    let segments = data.chunks();
-                    for segment in segments {
-                        if chunk_args.all || chunk_args.id.is_empty() || chunk_args.id.contains(&segment.id()){
+                    let data = Rofl::from_slice(&content[..]).unwrap();
+                    for segment in data.segment_iter().unwrap() {
+                        if segment.is_chunk() && (chunk_args.all || chunk_args.id.is_empty() || chunk_args.id.contains(&segment.id())){
                             let output_file = export_args.directory.join(format!("{}-{}-Chunk.bin", data.payload().unwrap().id(), segment.id()));
                             let write_success = std::fs::write(&output_file, segment.data());
                             if write_success.is_err() {
@@ -252,10 +251,9 @@ fn main() {
                 },
                 SubExportCommands::Keyframe(keyframe_args) => {
                     let content = std::fs::read(source_file).unwrap();
-                    let data = lolrofl::Rofl::from_slice(&content[..], lolrofl::consts::LOAD_SEGMENTS).unwrap();
-                    let segments = data.keyframes();
-                    for segment in segments {
-                        if keyframe_args.all || keyframe_args.id.is_empty() || keyframe_args.id.contains(&segment.id()){
+                    let data = Rofl::from_slice(&content[..]).unwrap();
+                    for segment in data.segment_iter().unwrap() {
+                        if segment.is_keyframe() && (keyframe_args.all || keyframe_args.id.is_empty() || keyframe_args.id.contains(&segment.id())){
                             let output_file = export_args.directory.join(format!("{}-{}-Keyframe.bin", data.payload().unwrap().id(), segment.id()));
                             let write_success = std::fs::write(&output_file, segment.data());
                             if write_success.is_err() {
@@ -267,18 +265,16 @@ fn main() {
                 },
                 SubExportCommands::All(_) => {
                     let content = std::fs::read(source_file).unwrap();
-                    let data = lolrofl::Rofl::from_slice(&content[..], lolrofl::consts::LOAD_SEGMENTS).unwrap();
-                    for segment_array in [data.chunks(), data.keyframes()] {
-                        for segment in segment_array {
-                            let output_file = export_args.directory.join(format!(
-                                "{}-{}-{}.bin", data.payload().unwrap().id(), segment.id(),
-                                if segment.is_chunk() { "Chunk" } else { "Keyframe" }
-                            ));
-                            let write_success = std::fs::write(&output_file, segment.data());
-                            if write_success.is_err() {
-                                eprintln!("An error occured while writing to {:?} ({})", &output_file, write_success.unwrap_err());
-                                std::process::exit(1)
-                            }
+                    let data = Rofl::from_slice(&content[..]).unwrap();
+                    for segment in data.segment_iter().unwrap() {
+                        let output_file = export_args.directory.join(format!(
+                            "{}-{}-{}.bin", data.payload().unwrap().id(), segment.id(),
+                            if segment.is_chunk() { "Chunk" } else { "Keyframe" }
+                        ));
+                        let write_success = std::fs::write(&output_file, segment.data());
+                        if write_success.is_err() {
+                            eprintln!("An error occured while writing to {:?} ({})", &output_file, write_success.unwrap_err());
+                            std::process::exit(1)
                         }
                     }
                 },
@@ -286,9 +282,8 @@ fn main() {
         },
         CliCommands::Analyze(analyze_args) => {
             let content = std::fs::read(source_file).unwrap();
-            let mut data = lolrofl::Rofl::from_slice(&content[..], lolrofl::consts::LOAD_SEGMENTS_HEAD).unwrap();
-            for segment_indice in 0..data.chunks().len() + data.keyframes().len() {
-                let mut segment = if segment_indice < data.chunks().len() { &data.chunks()[segment_indice]} else { &data.keyframes()[segment_indice-data.chunks().len()]};
+            let data = Rofl::from_slice(&content[..]).unwrap();
+            for segment in data.segment_iter().unwrap() {
                 let is_analyzed = 
                     ( // No filter is applied
                         analyze_args.id.len() == 0 && analyze_args.only.is_none()
@@ -302,15 +297,8 @@ fn main() {
                         && analyze_args.only != Some(SegmentType::Chunk)
                     );
                 if is_analyzed { // TODO: cleanup this code, it's a mess
-                    segment = if !segment.is_loaded() {
-                        if segment.is_chunk() {
-                            data.load_chunk(segment.id(), &content[..]).unwrap()
-                        } else {
-                            data.load_keyframe(segment.id(), &content[..]).unwrap()
-                        }
-                    } else { segment };
-                    let mut iterator = lolrofl::SegmentIterator::new(segment.data());
-                    let mut last_segment: Option<lolrofl::segments::GenericDataSegment> = None;
+                    let mut iterator = segment.section_iter().unwrap();
+                    let mut last_segment: Option<GenericSection> = None;
                     let mut inventory_count = std::collections::HashMap::<usize, usize>::new();
                     let mut all_datas: Vec<Vec<u8>> = Vec::new();
                     let mut total_subdata = 0;

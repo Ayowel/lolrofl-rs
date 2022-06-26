@@ -296,7 +296,7 @@ fn main() {
                         && (analyze_args.id.contains(&segment.id()) || analyze_args.id.len() == 0)
                         && analyze_args.only != Some(SegmentType::Chunk)
                     );
-                if is_analyzed { // TODO: cleanup this code, it's a mess
+                if is_analyzed { // TODO: cleanup this code
                     let mut iterator = segment.section_iter().unwrap();
                     let mut last_segment: Option<GenericSection> = None;
                     let mut inventory_count = std::collections::HashMap::<usize, usize>::new();

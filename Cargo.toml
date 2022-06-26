@@ -30,7 +30,6 @@ optional = true
 
 # Dezip payload
 [dependencies.flate2]
-# TODO: test if one of the dependencies can be dropped
 version = "^1.0.24"
 optional = true
 

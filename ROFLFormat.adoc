@@ -125,8 +125,6 @@ The header's position is provided in the BIN header
 
 The payload's position is provided in the BIN header. The payload runs until EOF and is encrypted with the encryption key. Hereafter, we use Segment to talk about a data range that may either be a Chunk or a Keyframe.
 
-TODO: decrypt and understand segmentation
-
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
 

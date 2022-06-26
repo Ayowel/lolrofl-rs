@@ -1,7 +1,7 @@
 name: Rust
 
 on:
-  push
+  push:
     tags:
       - '*'
   workflow_dispatch:

@@ -5,6 +5,9 @@ edition = "2021"
 license = "Apache-2.0"
 description = "Library and tool to parse and inspect ROFL replay files generated from League of Legends games."
 repository = "https://github.com/Ayowel/lolrofl-rs"
+homepage = "https://ayowel.github.io/lolrofl-rs/lolrofl/index.html"
+categories = ["command-line-utilities", "parser-implementations"]
+keywords = ["league-of-legends", "lol", "rofl"]
 exclude = ["/.gitignore", "/ROFLFormat.adoc", "/.github"]
 
 [[bin]]

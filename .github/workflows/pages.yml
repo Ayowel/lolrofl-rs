@@ -1,0 +1,25 @@
+name: GH Pages
+
+on:
+  push:
+    branch: "master"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install nightly Rust
+      run: rustup toolchain install nightly
+    - name: Build
+      run: cargo build --lib --verbose
+    - name: Create documentation
+      run: cargo +nightly doc --no-deps --verbose
+      env:
+        RUSTDOCFLAGS: --enable-index-page -Zunstable-options
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./target/doc

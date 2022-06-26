@@ -20,7 +20,7 @@ jobs:
     - name: Build
       run: cargo build --lib --verbose
     - name: Run tests with payload
-      run: cargo llvm-cov --doctests --lcov --output-path target\lcov.info
+      run: cargo +nightly llvm-cov --doctests --lcov --output-path target\lcov.info
     - name: Save coverage
       uses: codecov/codecov-action@v1
       with:

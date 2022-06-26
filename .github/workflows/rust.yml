@@ -13,12 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Install Rust
-      run: rustup toolchain install stable --component llvm-tools-preview
-    - name: Install cargo-llvm-cov
-      uses: taiki-e/install-action@cargo-llvm-cov
     - name: Build
       run: cargo build --lib --verbose
+    - name: Install Rust
+      run: rustup toolchain install nightly --component llvm-tools-preview
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@cargo-llvm-cov
     - name: Run tests with payload
       run: cargo +nightly llvm-cov --doctests --lcov --output-path target\lcov.info
     - name: Save coverage

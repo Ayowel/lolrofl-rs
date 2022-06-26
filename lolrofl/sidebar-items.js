@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["Errors","The errors that may be raised by this crate"]],"mod":[["iter","Scope for all the iterators that may be used to process ROFL data"],["model","Structs that map to parts of the data model of a ROFL file."]],"struct":[["Rofl","Base ROFL file parser"]]};

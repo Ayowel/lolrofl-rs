@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":[["section","The sections that make up a payload segment"]],"struct":[["BinHeader","ROFL file’s header information"],["PayloadHeader","ROFL file’s payload header information"],["Segment","Container for Chunk and Keyframe data"]]};

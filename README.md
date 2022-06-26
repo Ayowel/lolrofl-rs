@@ -1,6 +1,8 @@
 # LoLROFL
 
 [![Crates.io](https://img.shields.io/crates/v/lolrofl.svg?maxAge=2592000)](https://crates.io/crates/lolrofl)
+[![Coverage status](https://img.shields.io/codecov/c/github/Ayowel/lolrofl-rs)](https://codecov.io/github/Ayowel/lolrofl-rs/)
+[![MIT License](https://img.shields.io/badge/license-APACHE%202.0-blue.svg)](https://mit-license.org/)
 [![Documentation](https://docs.rs/lolrofl/badge.svg)](https://docs.rs/lolrofl)
 
 Rust library and tool to parse and inspect ROFL replay files generated from League of Legends games.

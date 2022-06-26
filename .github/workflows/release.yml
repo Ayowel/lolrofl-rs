@@ -1,0 +1,37 @@
+name: Rust
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build --lib --verbose
+    - name: Install Rust
+      run: rustup toolchain install nightly --component llvm-tools-preview
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@cargo-llvm-cov
+    - name: Run tests with payload
+      run: cargo +nightly llvm-cov --doctests --lcov --output-path target/lcov.info
+    - name: Save coverage
+      uses: codecov/codecov-action@v1
+      with:
+        fail_ci_if_error: false
+    - name: Run tests without payload
+      run: cargo test --no-default-features
+    - name: Build binary
+      run: cargo build --bin lolrofl --features "clap json payload" --verbose
+    - name: Create documentation
+      run: cargo doc --verbose
+    - run: cargo publish --token ${CRATES_TOKEN}
+      env:
+        CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}

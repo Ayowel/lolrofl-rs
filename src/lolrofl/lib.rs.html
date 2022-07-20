@@ -2,7 +2,7 @@
         </a><h2 class="location"></h2>
     </nav>
     <nav class="sidebar"><a class="sidebar-logo" href="../../lolrofl/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div>
-        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../lolrofl/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><div id="settings-menu" tabindex="-1">
+        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../lolrofl/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1">
                                 <a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div>
                         </div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
 <span id="2">2</span>
@@ -141,12 +141,85 @@
 <span id="135">135</span>
 <span id="136">136</span>
 <span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
 </pre><pre class="rust"><code><span class="doccomment">/*!
 Rust library and tool to parse and inspect ROFL replay files generated from League of Legends games.
 
 Backward-compatibility for replay files is NOT to be expected as of now.
 
-## Usage as a command-line tool
+# Usage as a command-line tool
 
 After building with `cargo install --bin lolrofl --features &quot;clap json payload&quot;`, a new `lolrofl` executable become available.
 
@@ -159,45 +232,14 @@ Said executable allows the inspection of ROFL files to extract game information,
 * `analyze`: Get low-level information on the file - usually for debug and development purpose
 * `export`: Export chunk or keyframe data to a file or directory
 
-## Usage as a library
+# Usage as a library
 
 Use `lolrofl` to parse a loaded file&#39;s content :
 
 ```rust
-// let content = std::fs::read(source_file).unwrap();
-# let content: Vec&lt;u8&gt; = vec![ 82, 73, 79, 84, 0, 0, // magic
-# 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, // signature
-# 0x20, 1, // head size
-# 0xcd, 1, 0, 0, // File size
-# 0x20, 1, 0, 0, // Metadata offset
-# 0x6b, 0, 0, 0, // Metadata length
-# 0x8b, 1, 0, 0, // Payload header offset
-# 0x42, 0, 0, 0, // Payload header length
-# 0xcd, 1, 0, 0, // Payload offset
-# // Metadata string
-# 0x7b, 0x22, 0x67, 0x61, 0x6d, 0x65, 0x4c, 0x65, 0x6e, 0x67, 0x74, 0x68, 0x22, 0x3a, 0x39, 0x31,
-# 0x37, 0x32, 0x32, 0x2c, 0x22, 0x67, 0x61, 0x6d, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e,
-# 0x22, 0x3a, 0x22, 0x31, 0x32, 0x2e, 0x31, 0x30, 0x2e, 0x34, 0x34, 0x34, 0x2e, 0x32, 0x30, 0x36,
-# 0x38, 0x22, 0x2c, 0x22, 0x6c, 0x61, 0x73, 0x74, 0x47, 0x61, 0x6d, 0x65, 0x43, 0x68, 0x75, 0x6e,
-# 0x6b, 0x49, 0x64, 0x22, 0x3a, 0x36, 0x2c, 0x22, 0x6c, 0x61, 0x73, 0x74, 0x4b, 0x65, 0x79, 0x46,
-# 0x72, 0x61, 0x6d, 0x65, 0x49, 0x64, 0x22, 0x3a, 0x32, 0x2c, 0x22, 0x73, 0x74, 0x61, 0x74, 0x73,
-# 0x4a, 0x73, 0x6f, 0x6e, 0x22, 0x3a, 0x22, 0x5b, 0x5d, 0x22, 0x7d,
-# // Payload header
-# 0xca, 0x63, 0xb6, 0x5f, 0x01, 0, 0, 0, // Match ID
-# 0x4a, 0x66, 0x1 , 0x0, // Match duration
-# 0x2, 0x0, 0x0, 0x0, // Number of keyframes
-# 0x6, 0x0, 0x0, 0x0, // Number of chunks
-# 0x1, 0x0, 0x0, 0x0, // Last data chunk
-# 0x2, 0x0, 0x0, 0x0, // First game chunk
-# 0x0, 0x87, 0x93, 0x3, // Keyframe interval
-# 0x20, 0x0, // Encryption Key Length
-# // Encryption key
-# 0x30, 0x4d, 0x35, 0x44, 0x67, 0x41, 0x32, 0x50, 0x73, 0x58, 0x4a, 0x59, 0x55, 0x36, 0x69, 0x30, 0x2f, 0x49, 0x58,
-# 0x4f, 0x33, 0x35, 0x59, 0x6a, 0x53, 0x50, 0x66, 0x79, 0x4f, 0x63, 0x6a, 0x38,
-# // Arbitrary bytes, more would follow in an actual file
-# 0x1,
-# ];
 // Parse the file&#39;s content with Rofl
+# let content = lolrofl::test::sample_base_file_0();
+// let content = std::fs::read(source_file).unwrap();
 let data = lolrofl::Rofl::from_slice(&amp;content[..]).unwrap();
 
 // Print the file&#39;s length as specified within the file (this may not match the actual file size if it is incomplete or corrupted)
@@ -215,9 +257,27 @@ println!(&quot;The game {} lasted {} seconds&quot;, payload.id(), payload.durati
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">error</span>::<span class="kw-2">*</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">iter</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">model</span>;
+<span class="comment">// FIXME: the test feature is only required because doctest context is not passed by cargo at compile-time</span>
+<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">doctest</span>, <span class="ident">test</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;test&quot;</span>))]</span>
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">test</span>;
 <span class="kw">use</span> <span class="ident">model</span>::<span class="kw-2">*</span>;
 
 <span class="doccomment">/// Base ROFL file parser</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// # Usage</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// ```rust</span>
+<span class="doccomment">/// // Parse a file&#39;s content</span>
+<span class="doccomment">/// # let content = lolrofl::test::sample_base_file_0();</span>
+<span class="doccomment">/// // let content = std::fs::read(&quot;game.rofl&quot;).unwrap();</span>
+<span class="doccomment">/// let game = lolrofl::Rofl::from_slice(&amp;content[..]).unwrap();</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// let header = game.head(); // File header</span>
+<span class="doccomment">/// let data = game.metadata(); // Game metadata JSON string</span>
+<span class="doccomment">/// # assert_eq!(data.is_ok(), true);</span>
+<span class="doccomment">/// let payload = game.payload(); // Game payload</span>
+<span class="doccomment">/// # assert_eq!(payload.is_ok(), true);</span>
+<span class="doccomment">/// ```</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Rofl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
     <span class="doccomment">/// ROFL file&#39;s Start Header</span>
     <span class="ident">head</span>: <span class="ident">BinHeader</span>,
@@ -227,10 +287,38 @@ println!(&quot;The game {} lasted {} seconds&quot;, payload.id(), payload.durati
 
 <span class="kw">impl</span> <span class="ident">Rofl</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Starting bytes of a ROFL file</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// This is public for ease of file recognition but should generally NOT be relied upon</span>
     <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">MAGIC</span>: [<span class="ident">u8</span>; <span class="number">4</span>] <span class="op">=</span> [<span class="number">82</span>,<span class="number">73</span>,<span class="number">79</span>,<span class="number">84</span>]; <span class="comment">// TODO: check if 6 bytes instead of 0</span>
     <span class="doccomment">/// Get the ROFL header</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// # Examples</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// ```rust</span>
+    <span class="doccomment">/// # let content = lolrofl::test::sample_base_file_0();</span>
+    <span class="doccomment">/// // let content = std::fs::read(&quot;game.rofl&quot;).unwrap();</span>
+    <span class="doccomment">/// let game = lolrofl::Rofl::from_slice(&amp;content[..]).unwrap();</span>
+    <span class="doccomment">/// println!(&quot;Expected file length: {} bytes&quot;, game.head().file_len());</span>
+    <span class="doccomment">/// # assert_eq!(game.head().file_len(), 0x01cd);</span>
+    <span class="doccomment">/// ```</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">head</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">BinHeader</span> { <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">head</span> }
     <span class="doccomment">/// Get the loaded JSON Metadata string</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// # Warning</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// The returned string is not guaranteed to be valid if the file is malformed</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// # Examples</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// ```rust</span>
+    <span class="doccomment">/// # let content = lolrofl::test::sample_base_file_0();</span>
+    <span class="doccomment">/// // let content = std::fs::read(&quot;game.rofl&quot;).unwrap();</span>
+    <span class="doccomment">/// let game = lolrofl::Rofl::from_slice(&amp;content[..]).unwrap();</span>
+    <span class="doccomment">/// let meta = json::parse(game.metadata().unwrap()).unwrap();</span>
+    <span class="doccomment">/// println!(&quot;Duration: {} ms&quot;, meta[&quot;gameLength&quot;]);</span>
+    <span class="doccomment">/// println!(&quot;Patch: {}&quot;, meta[&quot;gameVersion&quot;]);</span>
+    <span class="doccomment">/// # assert_eq!(meta[&quot;gameVersion&quot;], &quot;12.10.444.2068&quot;);</span>
+    <span class="doccomment">/// ```</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">metadata</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span>, <span class="ident">Errors</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">data</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">head</span>.<span class="ident">metadata_offset</span>() <span class="op">+</span> <span class="self">self</span>.<span class="ident">head</span>.<span class="ident">metadata_len</span>() {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">error::Errors::BufferTooSmall</span>);
@@ -241,6 +329,20 @@ println!(&quot;The game {} lasted {} seconds&quot;, payload.id(), payload.durati
         .<span class="ident">or_else</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="prelude-val">Err</span>(<span class="ident">error::Errors::InvalidBuffer</span>))
     }
     <span class="doccomment">/// Get the loaded payload header</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// # Examples</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// ```rust</span>
+    <span class="doccomment">/// # let content = lolrofl::test::sample_base_file_0();</span>
+    <span class="doccomment">/// // let content = std::fs::read(&quot;game.rofl&quot;).unwrap();</span>
+    <span class="doccomment">/// let game = lolrofl::Rofl::from_slice(&amp;content[..]).unwrap();</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// let payload = game.payload().unwrap();</span>
+    <span class="doccomment">/// println!(&quot;Game ID: {}&quot;, payload.id());</span>
+    <span class="doccomment">/// println!(&quot;Duration: {} ms&quot;, payload.duration());</span>
+    <span class="doccomment">/// # assert_eq!(payload.duration(), 0x01664a);</span>
+    <span class="doccomment">/// # assert_eq!(payload.chunk_count(), 6);</span>
+    <span class="doccomment">/// ```</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">payload</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PayloadHeader</span>, <span class="ident">Errors</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">data</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">head</span>.<span class="ident">payload_header_offset</span>() <span class="op">+</span> <span class="self">self</span>.<span class="ident">head</span>.<span class="ident">payload_header_len</span>() {
             <span class="prelude-val">Err</span>(<span class="ident">Errors::BufferTooSmall</span>)
@@ -252,7 +354,32 @@ println!(&quot;The game {} lasted {} seconds&quot;, payload.id(), payload.durati
         }
     }
     <span class="doccomment">/// Get an iterator over the payload&#39;s segments</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">segment_iter</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="kw">crate</span>::iter::PayloadIterator</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>, <span class="ident">error::Errors</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// `with_data` is implicitly `false` if the lib was compiled without the `payload` feature</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// # Examples</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// ```ignore</span>
+    <span class="doccomment">/// # let content = lolrofl::test::sample_base_file_0();</span>
+    <span class="doccomment">/// // let content = std::fs::read(&quot;game.rofl&quot;).unwrap();</span>
+    <span class="doccomment">/// let game = lolrofl::Rofl::from_slice(&amp;content[..]).unwrap();</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// for segment in game.segment_iter(false).unwrap() {</span>
+    <span class="doccomment">///     println(&quot;{} {}&quot;, if segment.is_chunk() { &quot;Chunk&quot; } else { &quot;Keyframe&quot; }, segment.id())</span>
+    <span class="doccomment">/// }</span>
+    <span class="doccomment">/// ```</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// ```rust</span>
+    <span class="doccomment">/// // Truncated file</span>
+    <span class="doccomment">/// # let content = lolrofl::test::sample_base_file_0();</span>
+    <span class="doccomment">/// // let content = std::fs::read(&quot;game.rofl&quot;).unwrap();</span>
+    <span class="doccomment">/// let game = lolrofl::Rofl::from_slice(&amp;content[..]).unwrap();</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// let mut data = game.segment_iter(false);</span>
+    <span class="doccomment">/// assert_eq!(data.is_err(), true)</span>
+    <span class="doccomment">/// ```</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">segment_iter</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">with_data</span>: <span class="ident">bool</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="kw">crate</span>::iter::PayloadIterator</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>, <span class="ident">error::Errors</span><span class="op">&gt;</span> {
+        <span class="comment">// FIXME: the doctest should be runnable</span>
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">data</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">head</span>.<span class="ident">file_len</span>() {
             <span class="prelude-val">Err</span>(<span class="ident">error::Errors::BufferTooSmall</span>)
         } <span class="kw">else</span> {
@@ -260,16 +387,35 @@ println!(&quot;The game {} lasted {} seconds&quot;, payload.id(), payload.durati
                 <span class="ident"><span class="kw">crate</span>::iter::PayloadIterator::new</span>(
                     <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">head</span>.<span class="ident">payload_offset</span>()..<span class="self">self</span>.<span class="ident">head</span>.<span class="ident">file_len</span>()],
                     <span class="kw-2">&amp;</span><span class="ident">p</span>,
+                    <span class="ident">with_data</span>,
                 )
             )
         }
     }
     <span class="doccomment">/// Create a new Rofl instance from a ROFL file&#39;s slice</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// # Panics</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// If the buffer contains less than 288 bytes - in the future, this will be an error</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// # Errors</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// If the slice does not start with [`MAGIC`]</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// [`MAGIC`]: Rofl::MAGIC</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// # Examples</span>
+    <span class="doccomment">/// </span>
+    <span class="doccomment">/// ```rust</span>
+    <span class="doccomment">/// # let content = lolrofl::test::sample_base_file_0();</span>
+    <span class="doccomment">/// // let content = std::fs::read(&quot;game.rofl&quot;).unwrap();</span>
+    <span class="doccomment">/// let game = lolrofl::Rofl::from_slice(&amp;content[..]).unwrap();</span>
+    <span class="doccomment">/// ```</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">from_slice</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="ident">slice</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Rofl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>, <span class="ident">Errors</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="ident">slice</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">Rofl::MAGIC</span>.<span class="ident">len</span>() <span class="op">|</span><span class="op">|</span> <span class="ident">Rofl::MAGIC</span> <span class="op">!</span><span class="op">=</span> <span class="ident">slice</span>[..<span class="ident">Rofl::MAGIC</span>.<span class="ident">len</span>()] {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Errors::InvalidBuffer</span>);
         }
-        <span class="comment">// FIXME: return Option&lt;&gt; in BinHeader initializers and control slice size</span>
+        <span class="comment">// FIXME: return Result&lt;&gt; in BinHeader initializers and control slice size</span>
         <span class="kw">let</span> <span class="ident">header</span> <span class="op">=</span> <span class="ident">BinHeader::from_raw_source</span>(<span class="ident">slice</span>);
 
         <span class="prelude-val">Ok</span>(<span class="ident">Rofl</span> {
@@ -279,5 +425,5 @@ println!(&quot;The game {} lasted {} seconds&quot;, payload.id(), payload.durati
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="lolrofl" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (20a6f3a8a 2022-06-25)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="lolrofl" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
 </body></html>

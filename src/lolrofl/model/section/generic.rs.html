@@ -2,7 +2,7 @@
         </a><h2 class="location"></h2>
     </nav>
     <nav class="sidebar"><a class="sidebar-logo" href="../../../../lolrofl/index.html"><div class="logo-container"><img class="rust-logo" src="../../../../rust-logo.svg" alt="logo"></div>
-        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../../lolrofl/index.html"><img class="rust-logo" src="../../../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><div id="settings-menu" tabindex="-1">
+        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../../lolrofl/index.html"><img class="rust-logo" src="../../../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1">
                                 <a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../wheel.svg"></a></div>
                         </div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
 <span id="2">2</span>
@@ -81,72 +81,154 @@
 <span id="75">75</span>
 <span id="76">76</span>
 <span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">byteorder</span>::{<span class="ident">ByteOrder</span>, <span class="ident">LittleEndian</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::section::SectionCore</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Errors</span>, <span class="ident">section::SectionCore</span>};
+
+<span class="doccomment">/// How time may be expressed within a section packet</span>
+<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">PacketTime</span> {
+    <span class="doccomment">/// Absolute time from the game&#39;s start</span>
+    <span class="ident">Absolute</span>(<span class="ident">f32</span>),
+    <span class="doccomment">/// Relative time in milliseconds from the last section</span>
+    <span class="ident">Relative</span>(<span class="ident">u8</span>),
+}
 
 <span class="doccomment">/// Generic data container used for quick scans and iteration over a ROFL segment&#39;s data</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GenericSection</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Length of the constant part of the section</span>
     <span class="ident">core_len</span>: <span class="ident">usize</span>,
+    <span class="doccomment">/// Type of the data within the packet</span>
+    <span class="ident">data_type</span>: <span class="ident">u32</span>,
     <span class="doccomment">/// Data of the section</span>
     <span class="ident">data</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span>[<span class="ident">u8</span>],
 }
 
 <span class="kw">impl</span> <span class="ident">GenericSection</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// Whether the time is encoded on 1 or 4 bytes</span>
+    <span class="kw">const</span> <span class="ident">TIME_BYTE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x80</span>;
+    <span class="doccomment">/// Whether a byte type is in the packet or the last packet&#39;s type</span>
+    <span class="doccomment">/// should be used</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Backward compatibility would require to handle dynamically the</span>
+    <span class="doccomment">/// associated size as it seems that the type bytes used to be only</span>
+    <span class="doccomment">/// 1-byte long</span>
+    <span class="kw">const</span> <span class="ident">TYPE_BYTE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x40</span>;
+    <span class="doccomment">/// Whether the block&#39;s parameters are encoded on 1 or 4 bytes</span>
+    <span class="kw">const</span> <span class="ident">BPARAM_BYTE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x20</span>;
+    <span class="doccomment">/// Whether the block&#39;s content&#39;s length is encoded on 1 or 4 bytes</span>
+    <span class="kw">const</span> <span class="ident">LENGTH_BYTE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x10</span>;
     <span class="doccomment">/// Get full raw internal section</span>
     <span class="attribute">#[<span class="ident">warn</span>(<span class="ident">deprecated</span>)]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[<span class="ident">u8</span>] { <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span> }
+    <span class="doccomment">/// Get the section&#39;s time</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">time</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">PacketTime</span> {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">data</span>[<span class="number">0</span>] <span class="op">&amp;</span> <span class="ident">GenericSection::TIME_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
+            <span class="ident">PacketTime::Relative</span>(<span class="self">self</span>.<span class="ident">data</span>[<span class="number">1</span>])
+        } <span class="kw">else</span> {
+            <span class="ident">PacketTime::Absolute</span>(<span class="ident">f32::from_bits</span>(<span class="ident">LittleEndian::read_u32</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="number">1</span>..<span class="number">5</span>])))
+        }
+    }
+    <span class="doccomment">/// The parameters for this packet. The slice may be either 1 or 4 bytes long</span>
+    <span class="doccomment">/// </span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">params</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[<span class="ident">u8</span>] {
+        <span class="kw">let</span> <span class="ident">marker</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">data</span>[<span class="number">0</span>];
 
+        <span class="kw">let</span> <span class="ident">params_offset</span> <span class="op">=</span> <span class="number">1</span>
+            <span class="op">+</span> <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::TIME_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {<span class="number">1</span>} <span class="kw">else</span> {<span class="number">4</span>}
+            <span class="op">+</span> <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::LENGTH_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {<span class="number">1</span>} <span class="kw">else</span> {<span class="number">4</span>}
+            <span class="op">+</span> <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::TYPE_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {<span class="number">0</span>} <span class="kw">else</span> {<span class="number">2</span>};
+        <span class="kw">let</span> <span class="ident">params_len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::BPARAM_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {<span class="number">1</span>} <span class="kw">else</span> {<span class="number">4</span>};
+
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="ident">params_offset</span>..<span class="ident">params_offset</span><span class="op">+</span><span class="ident">params_len</span>]
+    }
+    <span class="doccomment">/// The type of the data within the packet</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Types should be within u16&#39;s space, however a larger type</span>
+    <span class="doccomment">/// is used for future-proofing</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">data_type</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">u32</span> {
+        <span class="self">self</span>.<span class="ident">data_type</span>
+    }
     <span class="doccomment">/// Create a new GenericDataSegment from a slice.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// Providing a slice with the data of multiple GenericDataSegment returns</span>
     <span class="doccomment">/// the segment that starts at the first byte of the slice</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">from_slice</span>(<span class="ident">slice</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">GenericSection</span>, <span class="ident"><span class="kw">crate</span>::error::Errors</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">from_slice</span>(<span class="ident">slice</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>], <span class="ident">last_datatype</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">GenericSection</span>, <span class="ident"><span class="kw">crate</span>::error::Errors</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="ident">slice</span>.<span class="ident">len</span>() <span class="op">==</span> <span class="number">0</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident"><span class="kw">crate</span>::error::Errors::NoData</span>);
         }
-        <span class="kw">match</span> <span class="ident">slice</span>[<span class="number">0</span>] {
-            <span class="number">1</span> <span class="op">|</span> <span class="number">2</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">5</span>, <span class="number">2</span>, <span class="number">15</span>), <span class="comment">// Start segment</span>
-            <span class="number">17</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">5</span>, <span class="number">1</span>, <span class="number">12</span>),
-            <span class="number">32</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">4</span>, <span class="number">1</span>, <span class="number">12</span>),
-            <span class="number">33</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">5</span>, <span class="number">2</span>, <span class="number">12</span>),
-            <span class="number">49</span> <span class="op">|</span> <span class="number">50</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">5</span>, <span class="number">1</span>, <span class="number">9</span>),
-            <span class="number">81</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">5</span>, <span class="number">1</span>, <span class="number">10</span>),  
-            <span class="number">113</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">5</span>, <span class="number">1</span>, <span class="number">7</span>),
-            <span class="number">129</span> <span class="op">|</span> <span class="number">130</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">12</span>),
-            <span class="number">145</span> <span class="op">|</span> <span class="number">146</span> <span class="op">|</span> <span class="number">147</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">9</span>),
-            <span class="number">149</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">4</span>, <span class="number">1</span>, <span class="number">13</span>),
-            <span class="number">161</span> <span class="op">|</span> <span class="number">162</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">9</span>),
-            <span class="number">177</span> <span class="op">|</span> <span class="number">178</span> <span class="op">|</span> <span class="number">179</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">6</span>),
-            <span class="number">193</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">10</span>),
-            <span class="number">209</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">7</span>),
-            <span class="number">225</span> <span class="op">|</span> <span class="number">226</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">7</span>),
-            <span class="number">241</span> <span class="op">|</span> <span class="number">242</span> =&gt; <span class="ident">GenericSection::buffer_to_generic</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">4</span>),
-            <span class="kw">_</span> =&gt; <span class="prelude-val">Err</span>(<span class="ident"><span class="kw">crate</span>::error::Errors::InvalidBuffer</span>),
-        }
-    }
+        <span class="kw">let</span> <span class="ident">marker</span> <span class="op">=</span> <span class="ident">slice</span>[<span class="number">0</span>];
 
-    <span class="doccomment">/// Internal helper function to safely build a GenericDataSegment from a slice</span>
-    <span class="kw">fn</span> <span class="ident">buffer_to_generic</span>(<span class="ident">slice</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>], <span class="ident">size_offset</span>: <span class="ident">usize</span>, <span class="ident">size_len</span>: <span class="ident">usize</span>, <span class="ident">core_size</span>: <span class="ident">usize</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">GenericSection</span>, <span class="ident"><span class="kw">crate</span>::error::Errors</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="ident">slice</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">core_size</span> {
-            <span class="macro">eprintln!</span>(<span class="string">&quot;Failed due to insufficient slice length for core ({} of {} expected)&quot;</span>, <span class="ident">slice</span>.<span class="ident">len</span>(), <span class="ident">core_size</span>);
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident"><span class="kw">crate</span>::error::Errors::BufferTooSmall</span>);
-        }
-        <span class="kw">let</span> <span class="ident">data_len</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">size_len</span> {
-            <span class="number">0</span> =&gt; <span class="number">0</span>,
-            <span class="number">1</span> =&gt; <span class="ident">slice</span>[<span class="ident">size_offset</span>] <span class="kw">as</span> <span class="ident">usize</span>,
-            <span class="number">2</span> =&gt; <span class="ident">LittleEndian::read_u16</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>[<span class="ident">size_offset</span>..]) <span class="kw">as</span> <span class="ident">usize</span>,
-            <span class="kw">_</span> =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unsupported size length: {}&quot;</span>, <span class="ident">size_len</span>),
-        };
-        <span class="kw">if</span> <span class="ident">slice</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">core_size</span> <span class="op">+</span> <span class="ident">data_len</span> {
-            <span class="macro">eprintln!</span>(<span class="string">&quot;Failed due to insufficient slice length for data ({} of {} + {} expected)&quot;</span>, <span class="ident">slice</span>.<span class="ident">len</span>(), <span class="ident">core_size</span>, <span class="ident">data_len</span>);
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident"><span class="kw">crate</span>::error::Errors::BufferTooSmall</span>);
-        }
+        <span class="kw">let</span> <span class="ident">length_offset</span> <span class="op">=</span> <span class="number">1</span> <span class="op">+</span>
+            <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::TIME_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {<span class="number">1</span>} <span class="kw">else</span> {<span class="number">4</span>};
+        <span class="kw">let</span> <span class="ident">type_offset</span> <span class="op">=</span> <span class="ident">length_offset</span>
+            <span class="op">+</span> <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::LENGTH_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {<span class="number">1</span>} <span class="kw">else</span> {<span class="number">4</span>};
+        <span class="kw">let</span> <span class="ident">core_len</span> <span class="op">=</span> <span class="ident">type_offset</span>
+            <span class="op">+</span> <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::TYPE_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {<span class="number">0</span>} <span class="kw">else</span> {<span class="number">2</span>}
+            <span class="op">+</span> <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::BPARAM_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {<span class="number">1</span>} <span class="kw">else</span> {<span class="number">4</span>};
 
+        <span class="kw">if</span> <span class="ident">slice</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">core_len</span> { <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Errors::BufferTooSmall</span>); }
+        <span class="kw">let</span> <span class="ident">data_len</span> <span class="op">=</span>
+            <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::LENGTH_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
+                <span class="ident">slice</span>[<span class="ident">length_offset</span>] <span class="kw">as</span> <span class="ident">usize</span>
+            } <span class="kw">else</span> {
+                <span class="ident">LittleEndian::read_u32</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>[<span class="ident">length_offset</span>..]) <span class="kw">as</span> <span class="ident">usize</span>
+            };
+
+        <span class="kw">if</span> <span class="ident">slice</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">core_len</span> <span class="op">+</span> <span class="ident">data_len</span> { <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Errors::BufferTooSmall</span>); }
+
+        <span class="kw">let</span> <span class="ident">data_type</span> <span class="op">=</span>
+            <span class="kw">if</span> <span class="ident">marker</span> <span class="op">&amp;</span> <span class="ident">GenericSection::TYPE_BYTE</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
+                <span class="kw">if</span> <span class="ident">last_datatype</span>.<span class="ident">is_none</span>() { <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Errors::NoData</span>); }
+                <span class="ident">last_datatype</span>.<span class="ident">unwrap</span>()
+            } <span class="kw">else</span> {
+                <span class="ident">LittleEndian::read_u16</span>(<span class="kw-2">&amp;</span><span class="ident">slice</span>[<span class="ident">type_offset</span>..]) <span class="kw">as</span> <span class="ident">u32</span>
+            };
         <span class="prelude-val">Ok</span>(<span class="ident">GenericSection</span> {
-            <span class="ident">core_len</span>: <span class="ident">core_size</span>,
-            <span class="ident">data</span>: <span class="kw-2">&amp;</span><span class="ident">slice</span>[<span class="number">0</span>..<span class="ident">core_size</span><span class="op">+</span><span class="ident">data_len</span>],
+            <span class="ident">core_len</span>,
+            <span class="ident">data</span>: <span class="kw-2">&amp;</span><span class="ident">slice</span>[..<span class="ident">core_len</span><span class="op">+</span><span class="ident">data_len</span>],
+            <span class="ident">data_type</span>,
         })
     }
 }
@@ -156,8 +238,10 @@
     <span class="kw">fn</span> <span class="ident">kind</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">u8</span> {<span class="self">self</span>.<span class="ident">data</span>[<span class="number">0</span>]}
     <span class="kw">fn</span> <span class="ident">core_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">usize</span> { <span class="self">self</span>.<span class="ident">core_len</span> }
     <span class="kw">fn</span> <span class="ident">data_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">usize</span> { <span class="self">self</span>.<span class="ident">data</span>.<span class="ident">len</span>()<span class="op">-</span><span class="self">self</span>.<span class="ident">core_len</span> }
-    <span class="kw">fn</span> <span class="ident">raw_data</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">std::option::Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span>[<span class="ident">u8</span>]<span class="op">&gt;</span> { <span class="kw">if</span> <span class="self">self</span>.<span class="ident">data_len</span>() <span class="op">==</span> <span class="number">0</span> { <span class="prelude-val">None</span> } <span class="kw">else</span> {<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">core_len</span>..])} }
+    <span class="kw">fn</span> <span class="ident">raw_data</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">std::option::Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span>[<span class="ident">u8</span>]<span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">data_len</span>() <span class="op">==</span> <span class="number">0</span> { <span class="prelude-val">None</span> } <span class="kw">else</span> { <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">core_len</span>..]) }
+    }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../../" data-current-crate="lolrofl" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (20a6f3a8a 2022-06-25)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../../" data-current-crate="lolrofl" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
 </body></html>

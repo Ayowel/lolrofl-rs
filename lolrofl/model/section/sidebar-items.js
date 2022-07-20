@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["GenericSection","Generic data container used for quick scans and iteration over a ROFL segment’s data"]],"trait":[["SectionCore","A generic interface for data segments’ sections"]]};
+window.SIDEBAR_ITEMS = {"enum":[["PacketTime","How time may be expressed within a section packet"]],"struct":[["GenericSection","Generic data container used for quick scans and iteration over a ROFL segment’s data"]],"trait":[["SectionCore","A generic interface for data segments’ sections"]]};

@@ -2,7 +2,7 @@
         </a><h2 class="location"></h2>
     </nav>
     <nav class="sidebar"><a class="sidebar-logo" href="../../../lolrofl/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
-        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../lolrofl/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><div id="settings-menu" tabindex="-1">
+        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../lolrofl/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1">
                                 <a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div>
                         </div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
 <span id="2">2</span>
@@ -61,6 +61,9 @@
 <span id="55">55</span>
 <span id="56">56</span>
 <span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Errors</span>, <span class="ident">section</span>::{<span class="ident">GenericSection</span>, <span class="ident">SectionCore</span>}};
 
 <span class="doccomment">/// An iterator for lightweight scanning of data sections in a segment</span>
@@ -71,6 +74,8 @@
     <span class="ident">index</span>: <span class="ident">usize</span>,
     <span class="doccomment">/// Code of the last error that occured during an iteration</span>
     <span class="ident">last_error</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Errors</span><span class="op">&gt;</span>,
+    <span class="doccomment">/// Type of the last packet parsed, required</span>
+    <span class="ident">last_type</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="ident">SegmentIterator</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
@@ -80,15 +85,15 @@
             <span class="ident">data</span>,
             <span class="ident">index</span>: <span class="number">0</span>,
             <span class="ident">last_error</span>: <span class="prelude-val">None</span>,
+            <span class="ident">last_type</span>: <span class="prelude-val">None</span>,
         }
     }
-
     <span class="doccomment">/// Whether the iterator is valid</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_valid</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> { <span class="self">self</span>.<span class="ident">last_error</span>.<span class="ident">is_none</span>() }
     <span class="doccomment">/// Get the last error that occured</span>
     <span class="doccomment">/// </span>
     <span class="doccomment">/// Panics if no error occured</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_error</span>(<span class="self">self</span>) -&gt; <span class="ident">Errors</span> {<span class="self">self</span>.<span class="ident">last_error</span>.<span class="ident">unwrap</span>()}
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">error</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Errors</span> {<span class="self">self</span>.<span class="ident">last_error</span>.<span class="ident">as_ref</span>().<span class="ident">unwrap</span>()}
     <span class="doccomment">/// The index in the data slice the iterator is at</span>
     <span class="doccomment">/// </span>
     <span class="doccomment">/// This should only be used for debugging purposes when</span>
@@ -108,9 +113,10 @@
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">data</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">index</span> {
             <span class="kw">return</span> <span class="prelude-val">None</span>;
         }
-        <span class="ident">GenericSection::from_slice</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">index</span>..])
+        <span class="ident">GenericSection::from_slice</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">index</span>..], <span class="self">self</span>.<span class="ident">last_type</span>)
         .<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">f</span><span class="op">|</span> {
             <span class="self">self</span>.<span class="ident">index</span> <span class="op">+</span><span class="op">=</span> <span class="ident">f</span>.<span class="ident">len</span>();
+            <span class="self">self</span>.<span class="ident">last_type</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">f</span>.<span class="ident">data_type</span>());
             <span class="prelude-val">Ok</span>(<span class="ident">f</span>)
         }).<span class="ident">or_else</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span>{
             <span class="self">self</span>.<span class="ident">last_error</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">e</span>);
@@ -119,5 +125,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="lolrofl" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (20a6f3a8a 2022-06-25)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="lolrofl" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
 </body></html>

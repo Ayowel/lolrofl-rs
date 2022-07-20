@@ -123,7 +123,10 @@ The header's position is provided in the BIN header
 
 ## Payload
 
-The payload's position is provided in the BIN header. The payload runs until EOF and is encrypted with the encryption key. Hereafter, we use Segment to talk about a data range that may either be a Chunk or a Keyframe.
+[INFO]
+Hereafter, we use Segment to talk about a data range that may either be a Chunk or a Keyframe.
+
+The payload's position is provided in the BIN header. The payload runs until EOF and each of its data segment is encrypted with the encryption key. 
 
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
@@ -147,6 +150,20 @@ The payload starts with _chunk count + keyframe count_ Segment headers whose str
 |===
 
 ### Segment data
+
+[NOTE]
+--
+From here, all information is speculative and needs to be verified before usage.
+
+Any game update may invalidate this information
+--
+
+Payload data's sub-sections are split in two parts :
+
+* One header section
+* One data section whose length is provided in the section header
+
+#### Decryption
 
 To read a segment, get the Encryption Key and the game's ID as a string as well as the segment's data, then:
 
@@ -172,287 +189,91 @@ segment_zipped_data = blowfish_decrypt(segment_encrypted_data, chunk_key, true)
 segment_data = gunzip(segment_zipped_data)
 --
 
-[NOTE]
---
-From here, all information is speculative and needs to be verified before usage.
---
-
-Payload data's sub-sections are split in two parts :
-
-* One header section whose length depends on the section's type
-* One data section whose length is provided in the section header
-
 #### Payload segment sections map
 
-Payload sections are typed according to the first byte of the section. Each segment type may be found in either a loading chunk or keyframe (pre-game-start data), or a game chunk or keyframe, or a mix of either of them.
+Each section of a segment's data has a varying-size header determined by its first byte and an optional varying-size data section.
 
+.Section header+data short view
+[cols="6"]
+|===
+| Configuration byte (1 byte)
+| Game time (1/4 bytes)
+| Data Length (1/4 bytes)
+| Type (2 bytes ?)
+| Parameters (1/4 bytes)
+| Data (? bytes)
+|===
+
+.Types map
 |===
 | ID | Loading Chunk | Loading Keyframe | Game Chunk | Game Keyframe | Note
 
-|   1 |   |   | X | X | Start section of every chunk and keyframe
-|   2 |   |   | X |   | Alternative start section
-// |  17 | X | X |   |   | A VERIFIER
-// 32
-|  33 |   | X |   |   |
-|  49 |   | X | X |   | Game Chunk 1
-|  50 |   |   | X |   | Game Chunk 1
-|  81 |   | X |   | X |
-| 113 |   | X |   |   |
-| 129 |   | X | X |   |
-| 130 |   |   | X |   | 
-| 145 |   |   | X | X |
-| 146 |   |   | X |   |
-| 147 |   |   | X |   |
-| 161 |   |   | X | X |
-| 162 |   |   | X | X |
-| 177 |   |   | X | X |
-| 178 |   |   | X |   |
-| 179 |   |   | X |   |
-| 193 |   |   | X |   |
-| 209 |   |   | X | X |
-| 225 |   |   | X | X |
-| 226 |   |   | X |   |
-| 241 |   |   | X | X |
-| 242 |   |   | X |   |
+|   1 |   |   | X | X | TODO
 |===
 
-#### Payloads data structure
+#### Segment's data structure
 
-.Section Header common start structure
+.Section header+data extended view
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
 
-| 0 | 1 | u8 | Section type
-| 1 | 4 | ? | Four times 0
-| 6 | ? | ? | Variable data
+| 0 | 1 | u8 | Header configuration byte `H`
+| 1 | 4 if `H & 0x80 == 0`, else 1 | f32 else u8 | Game time, either absolute (f32, in s) or relative to last section (u8, in ms) 
+| Varying | 4 if `H & 0x10 == 0`, else 1 | u8 else u32 | Section's data's length
+| Varying | 2 if `H & 0x40 == 0`, else 0 | u16 else None | Section's data's type (equals last section's type if absent)
+| Varying | 4 if `H & 0x20 == 0`, else 1 | u32 else u8 | Section's type's parameters
+| Varying | ? | Variable | Section's data
 |===
 
-.Type = 1 - Main start section
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
+#### Sections tables
 
-| 0 | 1 | u8 | Section type = 1
-| 1 | 4 | f32 | In-game timestamp at payload segment start
-| 5 | 2 | u16 | Section data length L
-| 7 | 8 | ? | ?
-| 15 | L | Data = 1 | Data
-|===
+##### Interaction Pings
 
-.Type = 2 - Alternative start section
+Current version: ID = 397 [141,1]
+
+.Generic ping (len = 15)
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | Section type = 2
-| 1 | 4 | f32 | In-game timestamp at payload segment start
-| 5 | 2 | u16 | Section data length L
-| 7 | 8 | ? | ?
-| 15 | L | Data = 2 | Data
+| 0 | 2 | ? | Ping config ?
+| 2 | 4 | f32 | Ping position X
+| 6 | 4 | f32 | Ping position Y
+| 10 | ? | ? | Inject specifics here
+| END | 5 | ? | = [246, 176, 176, 176, 112] (Player ID (4 bytes) + specifier ?)
 |===
 
-.Type = 17
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 5 | Section Header start | Section start
-| 5 | 1 | u8 | Section data length
-| 6 | 6 | ? | ?
-| 12 | ? | Data = 17 | Data
-|===
-
-.Type = 33
+.Untargeted pings (1 specific byte)
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 5 | Section Header start | Section start
-| 5 | 2 | u16 | Segment data Length
-| 7 | 2 | u16 | Static 0 ?
-| 9 | 2 | ? | 
-| 11 | 1 | ? | Static 0 ?
-| 12 | ? | Data = 33 | Data
+| 0 | 1 | u8 | Ping type ID
 |===
 
-.Type = 49
+.Unit ping (5 specific bytes)
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 5 | Section Header start | Section start
-| 5 | 1 | u8 | Segment data Length ()
-| 6 | 3 | ? |
-| 9 | ? | Data = 49 | Data
+| 0 | 1 | u8 | Ping type ID
+| 1 | 4 | u32 | Target unit's ID
 |===
 
-.Type = 81
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
+##### Information ping
 
-| 0 | 5 | Section Header start | Section start
-| 5 | 1 | u8 | Segment data Length ()
-| 6 | 3 | ? |
-| 9 | 1 | ? | = 255
-| 10 | ? | Data = 81 | Data
-|===
+Information pings are pings performed from the TAB menu
 
-.Data = 81
---
-* If length = 1 => [32]
-* If length = 2 => [42-46, 80]
---
-
-
-.Type = 113
+.Information ping
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 5 | Section Header start | Section start
-| 5 | 1 | u8 | Segment data Length
-| 6 | 1 | u8 | = 0
-| 7 | ? | Data = 113 | Data
 |===
 
-.Data = 132
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
+##### Targetting pings
 
-| 0 | 1 | u8 | = 132
-| 1 | 1 | u8 | ?
-| 2 | 1 | u8 | = 115
-| 3 | ? | u8 | ?
-|===
+Information pings are pings used to target neutral objectives such as gromp , herald, drake, ...
 
-.Type = 145
+.Item shop ping
 |===
 | POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 145
-| 1 | 1 | u8 | = 0 ?
-| 2 | 1 | u8 | Segment data Length
-| 3 | 1 | u8 | = 0 ?
-| 4 | ? | Data = 145 | Data
 |===
 
-.Type = 145
+.Ping IDs
 |===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 146
-| 1 | 1 | u8 | = 0/33 ?
-| 2 | 1 | u8 | Segment data Length
-| 3 | 6 | ? | = [42, 1, 0, 0, 0, 0] ?
-| 9 | ? | Data = 146 | Data
-|===
-
-.Type = 161
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 161
-| 1 | 1 | u8 | = 0
-| 2 | 2 | u16 | Segment data Length
-| 4 | 2 | ? | = 0 ?
-| 6 | 2 | ? |
-| 8 | 1 | ? | = 0 ?
-| 9 | ? | Data = 161 | Data
-|===
-
-.Type = 162
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 162
-| 1 | 1 | u8 | = 0
-| 2 | 2 | u16 | Segment data Length
-| 4 | 2 | ? | = 0 ?
-| 6 | 2 | ? |
-| 8 | 1 | ? | = 0 ?
-| 9 | ? | Data = 162 | Data
-|===
-
-.Type = 177
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 177
-| 1 | 1 | u8 | = 0
-| 2 | 1 | u8 | Segment data Length
-| 3 | 2 | ? |
-| 5 | 1 | ? | 0
-| 6 | ? | Data = 177 | Data
-|===
-177, 0, 1, 200, 0, 0, 100,
-
-.Type = 178
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 178
-| 1 | 1 | u8 | = 0 ?
-| 2 | 1 | u8 | Segment data Length
-| 3 | 2 | ? | = 0 ?
-| 5 | 2 | ? |
-| 6 | ? | Data = 178 | Data
-|===
-
-.Type = 209
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 209
-| 1 | 1 | u8 | = 0
-| 2 | 1 | u8 | Segment data Length
-| 3 | 3 | ? | 
-| 6 | 1 | ? | = 255
-| 7 | ? | Data = 209 | Data
-|===
-
-.Type = 222
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 5 | Section Header start | Section start
-| 5 | 1 | u8 | Segment data Length ()
-| 6 | 1 | ? | = 2 ?
-| 7 | ? | Data = 222 ? | Data ?
-|===
-
-.Type = 237
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 5 | Section Header start | Section start
-| 5 | 1 | u8 | Segment data Length ()
-| 6 | 2 | ? | ?
-| 8 | ? | Data = 237 | Data
-|===
-
-.Type = 241
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-
-| 0 | 1 | u8 | = 241
-| 1 | 1 | u8 | = 0
-| 2 | 1 | u8 | Segment data Length
-| 3 | 1 | u8 | = 0 ?
-| 4 | ? | Data = 241 | Data
-|===
-
-.Data = 241 (~132)
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 132
-| 1 | 1 | u8 | ?
-| 2 | 1 | u8 | = 115
-| 3 | ? | u8 | ?
-|===
-
-.Type = 242
-|===
-| POS | SIZE | FORMAT | DESCRIPTION
-
-| 0 | 1 | u8 | = 242
-| 1 | 1 | u8 | = 0
-| 2 | 1 | u8 | Segment data Length
-| 3 | 1 | u8 | = 0 ?
-| 4 | ? | Data = 242 | Data
+| ID | Ping
+|  |
 |===

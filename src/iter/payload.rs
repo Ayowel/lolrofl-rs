@@ -22,11 +22,13 @@ pub struct PayloadIterator<'a> {
     /// The decryption cipher key
     #[cfg(feature="payload")]
     key: Blowfish::<byteorder::BigEndian>,
+    /// Whether to parse segment data or only iterate over headers
+    parse_data: bool,
 }
 
 impl<'a> PayloadIterator<'a> {
     /// Build a new iterator from a raw decrypted segment's slice
-    pub fn new(data: &'a[u8], head: &'_ PayloadHeader) -> Result<PayloadIterator<'a>, crate::error::Errors> {
+    pub fn new(data: &'a[u8], head: &'_ PayloadHeader, parse_data: bool) -> Result<PayloadIterator<'a>, crate::error::Errors> {
         let segment_count = (head.chunk_count()+head.keyframe_count()) as usize;
         if data.len() < segment_count*SEGMENT_HEADER_LEN {
             return Err(Errors::BufferTooSmall);
@@ -34,6 +36,7 @@ impl<'a> PayloadIterator<'a> {
         Ok(PayloadIterator {
             data,
             segment_count,
+            parse_data,
             index: 0,
             last_error: None,
             #[cfg(feature="payload")]
@@ -71,11 +74,13 @@ impl<'a> std::iter::Iterator for PayloadIterator<'a> {
         .and_then(|mut f| {
             #[cfg(feature="payload")]
             {
-                let segment_data_start = SEGMENT_HEADER_LEN * self.segment_count + f.offset();
-                if self.data.len() < segment_data_start + f.len() {
-                    return Err(Errors::BufferTooSmall);
-                } else {
-                    decrypt_segment(&self.data[segment_data_start..segment_data_start+f.len()], f.data_mut(), &mut self.key)?;
+                if self.parse_data {
+                    let segment_data_start = SEGMENT_HEADER_LEN * self.segment_count + f.offset();
+                    if self.data.len() < segment_data_start + f.len() {
+                        return Err(Errors::BufferTooSmall);
+                    } else {
+                        decrypt_segment(&self.data[segment_data_start..segment_data_start+f.len()], f.data_mut(), &mut self.key)?;
+                    }
                 }
             }
             self.index += 1;

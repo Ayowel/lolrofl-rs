@@ -17,7 +17,11 @@ required-features = ["clap", "json", "payload"]
 [features]
 default = ["payload"]
 payload = ["blowfish", "flate2", "base64"]
-  
+test = []
+
+[package.metadata.docs.rs]
+features = ["json", "test"]
+
 [dependencies]
 byteorder = {version = "^1.4.3"}
 

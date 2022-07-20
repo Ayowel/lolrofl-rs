@@ -8,6 +8,8 @@ pub struct SegmentIterator<'a> {
     index: usize,
     /// Code of the last error that occured during an iteration
     last_error: Option<Errors>,
+    /// Type of the last packet parsed, required
+    last_type: Option<u32>,
 }
 
 impl<'a> SegmentIterator<'a> {
@@ -17,15 +19,15 @@ impl<'a> SegmentIterator<'a> {
             data,
             index: 0,
             last_error: None,
+            last_type: None,
         }
     }
-
     /// Whether the iterator is valid
     pub fn is_valid(&self) -> bool { self.last_error.is_none() }
     /// Get the last error that occured
     /// 
     /// Panics if no error occured
-    pub fn to_error(self) -> Errors {self.last_error.unwrap()}
+    pub fn error(&self) -> &Errors {self.last_error.as_ref().unwrap()}
     /// The index in the data slice the iterator is at
     /// 
     /// This should only be used for debugging purposes when
@@ -45,9 +47,10 @@ impl<'a> std::iter::Iterator for SegmentIterator<'a> {
         if self.data.len() <= self.index {
             return None;
         }
-        GenericSection::from_slice(&self.data[self.index..])
+        GenericSection::from_slice(&self.data[self.index..], self.last_type)
         .and_then(|f| {
             self.index += f.len();
+            self.last_type = Some(f.data_type());
             Ok(f)
         }).or_else(|e|{
             self.last_error = Some(e);

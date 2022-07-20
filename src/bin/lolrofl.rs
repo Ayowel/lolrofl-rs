@@ -139,6 +139,12 @@ struct AnalyzeCommand {
     #[clap(long("type"), help("In stats mode, a specific type whose length stats should be calculated"))]
     typed: Option<usize>,
 
+    #[clap(long("start-time"), help("Only process blocks after this in-game time in seconds"))]
+    start_time: Option<f32>,
+
+    #[clap(long("end-time"), help("Only process blocks before this in-game time in seconds"))]
+    end_time: Option<f32>,
+
     #[clap(short('H'), long("human-readable"), help("Improve display for reading by a human"))]
     human: bool,
 }
@@ -238,7 +244,7 @@ fn main() {
                 SubExportCommands::Chunk(chunk_args) => {
                     let content = std::fs::read(source_file).unwrap();
                     let data = Rofl::from_slice(&content[..]).unwrap();
-                    for segment in data.segment_iter().unwrap() {
+                    for segment in data.segment_iter(true).unwrap() {
                         if segment.is_chunk() && (chunk_args.all || chunk_args.id.is_empty() || chunk_args.id.contains(&segment.id())){
                             let output_file = export_args.directory.join(format!("{}-{}-Chunk.bin", data.payload().unwrap().id(), segment.id()));
                             let write_success = std::fs::write(&output_file, segment.data());
@@ -252,7 +258,7 @@ fn main() {
                 SubExportCommands::Keyframe(keyframe_args) => {
                     let content = std::fs::read(source_file).unwrap();
                     let data = Rofl::from_slice(&content[..]).unwrap();
-                    for segment in data.segment_iter().unwrap() {
+                    for segment in data.segment_iter(true).unwrap() {
                         if segment.is_keyframe() && (keyframe_args.all || keyframe_args.id.is_empty() || keyframe_args.id.contains(&segment.id())){
                             let output_file = export_args.directory.join(format!("{}-{}-Keyframe.bin", data.payload().unwrap().id(), segment.id()));
                             let write_success = std::fs::write(&output_file, segment.data());
@@ -266,7 +272,7 @@ fn main() {
                 SubExportCommands::All(_) => {
                     let content = std::fs::read(source_file).unwrap();
                     let data = Rofl::from_slice(&content[..]).unwrap();
-                    for segment in data.segment_iter().unwrap() {
+                    for segment in data.segment_iter(true).unwrap() {
                         let output_file = export_args.directory.join(format!(
                             "{}-{}-{}.bin", data.payload().unwrap().id(), segment.id(),
                             if segment.is_chunk() { "Chunk" } else { "Keyframe" }
@@ -283,7 +289,8 @@ fn main() {
         CliCommands::Analyze(analyze_args) => {
             let content = std::fs::read(source_file).unwrap();
             let data = Rofl::from_slice(&content[..]).unwrap();
-            for segment in data.segment_iter().unwrap() {
+            let mut time: f32 = 0.;
+            for segment in data.segment_iter(true).unwrap() {
                 let is_analyzed = 
                     ( // No filter is applied
                         analyze_args.id.len() == 0 && analyze_args.only.is_none()
@@ -300,20 +307,33 @@ fn main() {
                     let mut iterator = segment.section_iter().unwrap();
                     let mut last_segment: Option<GenericSection> = None;
                     let mut inventory_count = std::collections::HashMap::<usize, usize>::new();
-                    let mut all_datas: Vec<Vec<u8>> = Vec::new();
+                    let mut all_datas: Vec<(f32, Vec<u8>)> = Vec::new();
                     let mut total_subdata = 0;
+                    let mut local_time: u32 = 0;
                     for g in iterator.by_ref() {
-                        all_datas.push(g.bytes().to_vec());
-                        if g.kind() == 225 || g.kind() == 209 {
-                            //println!("{:?}", g.bytes());
+                        match g.time() {
+                            lolrofl::model::section::PacketTime::Absolute(t) => {
+                                time = t;
+                                local_time = 0;
+                            }
+                            lolrofl::model::section::PacketTime::Relative(t) => {
+                                local_time += t as u32;
+                            }
                         }
+                        let effective_time = time + (local_time as f32) / 1000.;
+                        let time_condition =
+                            (analyze_args.start_time.is_some() && effective_time < *analyze_args.start_time.as_ref().unwrap())
+                            || (analyze_args.end_time.is_some() && effective_time > *analyze_args.end_time.as_ref().unwrap());
+                        if time_condition {continue;}
                         if analyze_args.typed.is_none() {
+                            all_datas.push((effective_time, g.bytes().to_vec()));
                             total_subdata +=1;
-                            inventory_count.insert(g.kind() as usize, inventory_count.get(&(g.kind() as usize)).unwrap_or(&0) + 1);
-                        } else if Some(g.kind() as usize) == analyze_args.typed {
-//                            println!("tee {:?}", g.bytes());
-                            total_subdata +=1;
-                            inventory_count.insert(g.len() as usize, inventory_count.get(&g.len()).unwrap_or(&0) + 1);
+                            inventory_count.insert(g.data_type() as usize, inventory_count.get(&(g.data_type() as usize)).unwrap_or(&0) + 1);
+                        } else if Some(g.data_type() as usize) == analyze_args.typed {
+                            all_datas.push((effective_time, g.bytes().to_vec()));
+                            total_subdata += 1;
+                            //println!("ONE ({}): {:?}", effective_time, g.bytes());
+                            inventory_count.insert(g.data_len() as usize, inventory_count.get(&g.data_len()).unwrap_or(&0) + 1);
                         }
                         last_segment = Some(g);
                     }
@@ -336,12 +356,15 @@ fn main() {
                             }
                             if analyze_args.human {
                                 println!(
-                                    "{} {}: [",
+                                    "{} {}:",
                                     if segment.is_chunk() {"Chunk"} else {"Keyframe"},
                                     segment.id(),
                                 );
+                                let mut last_data_type = 0;
                                 for data in all_datas {
-                                    println!("{:?},", data);
+                                    let section = lolrofl::model::section::GenericSection::from_slice(&data.1, Some(last_data_type)).unwrap();
+                                    last_data_type = section.data_type();
+                                    println!("{:#04}#{:#03} at {}s ({:?}): {:?}", section.data_type(), section.kind(), data.0, section.params(), section.raw_data().or(Some(&[])).unwrap());
                                 }
                                 if args.verbose && !iterator.is_valid() {
                                     println!(
@@ -349,7 +372,6 @@ fn main() {
                                         &iterator.internal_slice()[iterator.internal_index()..iterator.internal_slice().len()],
                                     );
                                 }
-                                println!("]");
                             } else {
                                 println!("{}{}: {:?}", if segment.is_chunk() {"C"} else {"K"}, segment.id(), all_datas);
                             }
@@ -357,10 +379,11 @@ fn main() {
                         AnalyzeCommandMode::Stats => {
                             if !iterator.is_valid() {
                                 eprintln!(
-                                    "BROKE at index {} of {} {}, next bytes: {:?}",
+                                    "BROKE at index {} of {} {} with error {}, next bytes: {:?}",
                                     iterator.internal_index(),
                                     if segment.is_chunk() {"Chunk"} else {"Keyframe"},
                                     segment.id(),
+                                    iterator.error(),
                                     &iterator.internal_slice()[iterator.internal_index()..std::cmp::min(iterator.internal_index()+20, iterator.internal_slice().len())],
                                 );
                             }

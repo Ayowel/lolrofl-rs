@@ -1,5 +1,24 @@
 # Changelog
 
+## LolRofl 0.3.0
+
+This release adds a lot of documentation examples and tests as well as some breaking changes when manipulating payload data
+
+### Added
+
+* Added a new `model::section::PacketTime` enum to represent payload packet time
+* Added a new `model::section::GenericSection::time` method to get the timestamp of a payload packet
+* Added a new `model::section::GenericSection::params` method to get the parameters of a packet
+* Added `--start-time` and `--end-time` filter to `lolrofl analyze` command-line
+
+### Changed
+
+* Changed the signature of `Rofl::segment_iter` and `iter::PayloadIterator::new` to accept an additional boolean parameter to parse payload data (`true`) or only headers (`false`)
+
+### Fixed
+
+* Fixed `GenericSection::from_slice` to ensure it would work on arbitrary packets
+
 ## LolRofl 0.2.0
 
 This release features a lot of cleanup in the public API as well as huge design changes in the way data is loaded and stored. This should be treated as a completely different version from 0.1.0.
